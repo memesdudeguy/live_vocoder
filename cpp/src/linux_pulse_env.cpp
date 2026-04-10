@@ -507,7 +507,7 @@ static bool win32_wine_spawn_bash_lc(const std::string& bash_exe, const std::str
     CloseHandle(pi.hProcess);
 
     if (capture_stdout != nullptr) {
-        Sleep(80);
+        Sleep(130);
         const std::string cap_path = win32_win32_path_to_fwd_slashes(win_cap_file);
         HANDLE hf = INVALID_HANDLE_VALUE;
         char full_buf[MAX_PATH * 2];
@@ -796,9 +796,10 @@ static void lv_win32_wine_move_livevocoder_sink_input_to_pulse_sink_impl(const c
     }
     const std::string qsk = sh_single_quote_bash(sk);
     // PipeWire: duplicate sink names break `pactl move-sink-input … <name>`; resolve numeric sink id in the same
-    // bash snapshot as the sink-input id. Sink-input often appears ~1–2s after Pa_StartStream under Wine.
-    for (int attempt = 0; attempt < 32; ++attempt) {
-        Sleep(110);
+    // bash snapshot as the sink-input id. Sink-input often appears late under Wine; WASAPI/MMDev names differ from
+    // "Live Vocoder" on the host.
+    for (int attempt = 0; attempt < 48; ++attempt) {
+        Sleep(150);
         // bash -lc wraps this in double quotes — do not use $'\t' (ANSI-C quoting fails there). Use a literal tab in awk FS.
         const std::string inner =
             std::string("sn=") + qsk +
@@ -806,7 +807,8 @@ static void lv_win32_wine_move_livevocoder_sink_input_to_pulse_sink_impl(const c
             "{gsub(/^[ \\t]+|[ \\t]+$/,\"\",$2);if($2==w)i=$1}END{print i}');"
             "id=$(pactl list sink-inputs | awk '/^Sink Input #[0-9]+/{sub(/^Sink Input #/,\"\",$0);"
             "gsub(/[^0-9].*/,\"\",$0);sid=$0}"
-            "$0 ~ /application\\.name = / && $0 ~ /[Ll]ive[Vv]ocoder|[Ll]ive [Vv]ocoder/{print sid;exit}');"
+            "$0 ~ /application\\.name = / && $0 ~ /[Ll]ive[Vv]ocoder|[Ll]ive [Vv]ocoder|PortAudio|portaudio|[Ww]ine|"
+            "MMDev|Wasapi|WASAPI|[Pp]ulseAudio|ALSA plug-in|alsa\\.plug/{print sid;exit}');"
             "if test -n \"$id\" && test -n \"$sid\"; then pactl move-sink-input \"$id\" \"$sid\"; fi";
         (void)win32_wine_bash_lc_exec(inner);
     }
@@ -992,7 +994,9 @@ void lv_apply_pulse_sink_env_before_portaudio() {
     char psbuf[256];
     const DWORD ps_len = GetEnvironmentVariableA("PULSE_SINK", psbuf, static_cast<DWORD>(sizeof(psbuf)));
     if (ps_len > 0U && ps_len < static_cast<DWORD>(sizeof(psbuf))) {
-        g_lv_win32_applied_pulse_sink_for_move.assign(psbuf, static_cast<std::size_t>(ps_len));
+        psbuf[ps_len] = '\0';
+        // Wine: MinGW getenv can miss values only in the Win32 block unless CRT is synced (same as native).
+        lv_win32_assign_env_for_crt_and_os("PULSE_SINK", psbuf);
         return;
     }
     const char* lv = std::getenv("LIVE_VOCODER_PULSE_SINK");

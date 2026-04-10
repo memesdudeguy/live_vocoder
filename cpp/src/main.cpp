@@ -171,7 +171,7 @@ static bool prepare_carrier_samples(const char* carrier_path, int sample_rate, s
     tmp_f32.clear();
     err_out.clear();
     std::filesystem::path use_path = carrier_path;
-    if (!carrier_path_is_raw_f32(use_path)) {
+    if (!carrier_file_is_raw_f32_carrier(use_path)) {
 #if defined(_WIN32)
         const unsigned pid_u = static_cast<unsigned>(_getpid());
 #else

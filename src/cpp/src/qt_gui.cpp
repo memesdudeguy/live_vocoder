@@ -674,7 +674,7 @@ private:
             return false;
         }
 
-        if (!carrier_path_is_raw_f32(cp)) {
+        if (!carrier_file_is_raw_f32_carrier(cp)) {
             std::filesystem::create_directories(lib_, fsec);
             std::filesystem::path stem = cp.stem();
             if (stem.empty()) {

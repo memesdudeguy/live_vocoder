@@ -4,8 +4,14 @@
 #include <string>
 #include <vector>
 
-/** True if extension is .f32 (case-insensitive). */
+/** True if extension is .f32 (case-insensitive), or filename ends with ``.f32`` (Wine path quirks). */
 bool carrier_path_is_raw_f32(const std::filesystem::path& path);
+
+/**
+ * Skip ffmpeg when this path is raw float32: ``.f32`` by name, or (no known audio extension) size/header sniff.
+ * Important under Wine so ``.f32`` drops are not misclassified.
+ */
+bool carrier_file_is_raw_f32_carrier(const std::filesystem::path& path);
 
 /**
  * True if ``p`` exists and is not a directory. On Windows, OneDrive “online-only” files may fail
@@ -23,7 +29,7 @@ std::filesystem::path carrier_win32_documents_folder();
  * Decode any audio format ffmpeg understands → mono f32le at sample_rate Hz.
  * Overwrites dst_f32. On Unix: ``ffmpeg`` on PATH. On Windows / Wine: ``ffmpeg.exe`` on PATH,
  * or ``ffmpeg.exe`` next to ``LiveVocoder.exe``, or env ``LIVE_VOCODER_FFMPEG`` = full path
- * to ``ffmpeg.exe``. Raw ``.f32`` carriers skip ffmpeg.
+ * to ``ffmpeg.exe`` (under Wine: only if that file is a Windows PE). Raw ``.f32`` carriers skip ffmpeg.
  */
 bool carrier_ffmpeg_to_f32(int sample_rate, const std::filesystem::path& src,
                            const std::filesystem::path& dst_f32, std::string& err_out);

@@ -28,7 +28,34 @@ bool carrier_path_is_raw_f32(const std::filesystem::path& path) {
     for (char& c : ext) {
         c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
     }
-    return ext == ".f32";
+    if (ext == ".f32") {
+        return true;
+    }
+#if defined(_WIN32)
+    const std::wstring wfn = path.filename().wstring();
+    if (wfn.size() >= 4) {
+        const wchar_t suf[] = L".f32";
+        bool match = true;
+        for (std::size_t j = 0; j < 4; ++j) {
+            wchar_t c = wfn[wfn.size() - 4 + j];
+            if (c >= L'A' && c <= L'Z') {
+                c = static_cast<wchar_t>(c - L'A' + L'a');
+            }
+            if (c != suf[j]) {
+                match = false;
+                break;
+            }
+        }
+        if (match) {
+            return true;
+        }
+    }
+#endif
+    std::string fn = path.filename().string();
+    for (char& c : fn) {
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    }
+    return fn.size() >= 4 && fn.compare(fn.size() - 4, 4, ".f32") == 0;
 }
 
 bool carrier_source_path_usable(const std::filesystem::path& p, std::error_code& ec) {
@@ -109,6 +136,16 @@ static bool carrier_win32_running_under_wine() {
     }
     cached = 2;
     return false;
+}
+
+/** PE ``MZ`` check — under Wine, LIVE_VOCODER_FFMPEG may point at another Windows ffmpeg.exe but not host ELF. */
+static bool carrier_win32_file_starts_with_mz(const std::filesystem::path& p) {
+    std::ifstream f(p, std::ios::binary);
+    unsigned char sig[2];
+    if (!f.read(reinterpret_cast<char*>(sig), 2)) {
+        return false;
+    }
+    return sig[0] == 'M' && sig[1] == 'Z';
 }
 
 std::filesystem::path carrier_win32_localize_path_for_filesystem(const std::filesystem::path& raw) {
@@ -530,7 +567,9 @@ static void carrier_win32_err_ffmpeg_not_run(std::string& err_out) {
         "could not run ffmpeg.exe. On Windows put ffmpeg.exe next to LiveVocoder.exe (installer does this), "
         "or add ffmpeg to PATH";
     if (!carrier_win32_running_under_wine()) {
-        err_out += ", or set LIVE_VOCODER_FFMPEG to the full path to ffmpeg.exe (native Windows only; ignored under Wine)";
+        err_out += ", or set LIVE_VOCODER_FFMPEG to the full path to ffmpeg.exe";
+    } else {
+        err_out += ", or set LIVE_VOCODER_FFMPEG to a Windows ffmpeg.exe (PE/MZ only — not Linux /usr/bin/ffmpeg)";
     }
     err_out += ". ";
     if (carrier_win32_running_under_wine()) {
@@ -546,7 +585,7 @@ static void carrier_win32_err_ffmpeg_failed_no_stderr(std::string& err_out) {
             " — unsupported format, unreadable path under Wine, or missing codec in ffmpeg.exe. "
             "Fix: put Windows ffmpeg.exe next to LiveVocoder.exe, use Library… inside the app, or pre-convert on the host: "
             "ffmpeg -y -i track.mp3 -vn -f f32le -c:a pcm_f32le -ac 1 -ar 48000 carrier.f32 then drop the .f32. "
-            "(LIVE_VOCODER_FFMPEG is ignored under Wine.)";
+            "(Optional: LIVE_VOCODER_FFMPEG may point at another Windows ffmpeg.exe if that file is PE/MZ.)";
         return;
     }
     err_out +=
@@ -576,6 +615,64 @@ static bool carrier_extension_is_convertible_audio(const std::filesystem::path& 
         }
     }
     return false;
+}
+
+static bool carrier_sniff_looks_like_container_header(const unsigned char* h, std::size_t n) {
+    if (n < 4) {
+        return false;
+    }
+    if (h[0] == 'R' && h[1] == 'I' && h[2] == 'F' && h[3] == 'F') {
+        return true;
+    }
+    if (h[0] == 'I' && h[1] == 'D' && h[2] == '3') {
+        return true;
+    }
+    if (n >= 4 && h[0] == 'O' && h[1] == 'g' && h[2] == 'g' && h[3] == 'S') {
+        return true;
+    }
+    if (n >= 4 && h[0] == 'f' && h[1] == 'L' && h[2] == 'a' && h[3] == 'C') {
+        return true;
+    }
+    if (n >= 2 && h[0] == 0xff && (h[1] & 0xe0) == 0xe0) {
+        return true;
+    }
+    if (n >= 8 && h[4] == 'f' && h[5] == 't' && h[6] == 'y' && h[7] == 'p') {
+        return true;
+    }
+    if (n >= 12 && h[0] == 0 && h[1] == 0 && h[2] == 0 && h[3] != 0 && h[4] == 'f' && h[5] == 't' && h[6] == 'y' &&
+        h[7] == 'p') {
+        return true;
+    }
+    if (n >= 4 && h[0] == 'F' && h[1] == 'O' && h[2] == 'R' && h[3] == 'M') {
+        return true;
+    }
+    return false;
+}
+
+bool carrier_file_is_raw_f32_carrier(const std::filesystem::path& path) {
+    if (carrier_path_is_raw_f32(path)) {
+        return true;
+    }
+    if (carrier_extension_is_convertible_audio(path)) {
+        return false;
+    }
+    std::error_code ec;
+    if (!carrier_source_path_usable(path, ec)) {
+        return false;
+    }
+    const auto sz = std::filesystem::file_size(path, ec);
+    if (ec || sz < sizeof(float) * 64 || (sz % sizeof(float)) != 0) {
+        return false;
+    }
+    std::ifstream f(path, std::ios::binary);
+    unsigned char h[16]{};
+    if (!f.read(reinterpret_cast<char*>(h), static_cast<std::streamsize>(sizeof h))) {
+        return false;
+    }
+    if (carrier_sniff_looks_like_container_header(h, sizeof h)) {
+        return false;
+    }
+    return true;
 }
 
 void carrier_collect_library_entries(const std::filesystem::path& dir, std::vector<std::filesystem::path>& out) {
@@ -718,8 +815,11 @@ bool carrier_ffmpeg_to_f32(int sample_rate, const std::filesystem::path& src,
             tmp_out_path = std::filesystem::path(std::wstring(tmp_root, static_cast<std::size_t>(nt_root))) /
                            (std::wstring(L"lvoc_out_") + uniq + L".f32");
             std::error_code abs_ec;
-            const std::filesystem::path src_abs = std::filesystem::absolute(src, abs_ec);
-            if (!abs_ec) {
+            std::filesystem::path src_abs = std::filesystem::absolute(src, abs_ec);
+            if (abs_ec) {
+                src_abs = src.lexically_normal();
+            }
+            {
                 const std::wstring src_w = src_abs.wstring();
                 const std::wstring tmp_in_w = tmp_in_path.wstring();
                 bool staged_in = false;
@@ -730,8 +830,15 @@ bool carrier_ffmpeg_to_f32(int sample_rate, const std::filesystem::path& src,
                     std::filesystem::remove(tmp_in_path, rem_ec);
                     if (carrier_win32_streaming_copy_file_w(src_w, tmp_in_w)) {
                         staged_in = true;
-                    } else if (!run_on_wine && carrier_win32_path_may_be_onedrive(src_abs)) {
-                        onedrive_stage_failed = true;
+                    } else {
+                        std::error_code cp_ec;
+                        std::filesystem::copy_file(src_abs, tmp_in_path,
+                                                   std::filesystem::copy_options::overwrite_existing, cp_ec);
+                        if (!cp_ec) {
+                            staged_in = true;
+                        } else if (!run_on_wine && carrier_win32_path_may_be_onedrive(src_abs)) {
+                            onedrive_stage_failed = true;
+                        }
                     }
                 }
                 if (staged_in) {
@@ -747,8 +854,7 @@ bool carrier_ffmpeg_to_f32(int sample_rate, const std::filesystem::path& src,
     const std::string dst_s = ffmpeg_path_for_win32_ffmpeg_cmd(dst_run);
     const std::string ar_s = std::to_string(sample_rate);
 
-    // Windows / Wine: need Windows ffmpeg.exe. LIVE_VOCODER_FFMPEG is **native Windows only** (wide env + UTF-8
-    // getenv fallback); ignored under Wine so users do not point at the host /usr/bin/ffmpeg by mistake.
+    // Under Wine, only honor LIVE_VOCODER_FFMPEG when the file is PE (MZ) so host ELF is never selected.
     std::vector<std::wstring> ff_candidates;
     if (!run_on_wine) {
         wchar_t evb[4096];
@@ -770,6 +876,19 @@ bool carrier_ffmpeg_to_f32(int sample_rate, const std::filesystem::path& src,
                         lv_push_unique_ffmpeg_w(ff_candidates, std::move(rw));
                     }
                 }
+            }
+        }
+    } else {
+        wchar_t evb[4096];
+        const DWORD ne =
+            GetEnvironmentVariableW(L"LIVE_VOCODER_FFMPEG", evb, static_cast<DWORD>(sizeof(evb) / sizeof(evb[0])));
+        if (ne > 0 && ne < sizeof(evb) / sizeof(evb[0])) {
+            std::error_code ec_env;
+            const std::filesystem::path ep(evb);
+            const auto epst = std::filesystem::status(ep, ec_env);
+            if (std::filesystem::exists(epst) && !std::filesystem::is_directory(epst) &&
+                carrier_win32_file_starts_with_mz(ep)) {
+                lv_push_unique_ffmpeg_w(ff_candidates, ep.lexically_normal().wstring());
             }
         }
     }
@@ -867,6 +986,10 @@ bool carrier_ffmpeg_to_f32(int sample_rate, const std::filesystem::path& src,
             std::filesystem::remove(tmp_out_path, ec_tmp);
         }
         std::string detail = slurp_text_file_trunc_w(err_log.wstring(), 900);
+        if (detail.empty() && run_on_wine) {
+            Sleep(80);
+            detail = slurp_text_file_trunc_w(err_log.wstring(), 900);
+        }
         err_out = "ffmpeg failed (exit " + std::to_string(exit_code) + ")";
         if (!detail.empty()) {
             err_out += ":\n";
@@ -879,6 +1002,12 @@ bool carrier_ffmpeg_to_f32(int sample_rate, const std::filesystem::path& src,
                 "\n\nOneDrive: the app could not copy your file into %TEMP% (often an online-only placeholder). "
                 "In Explorer, right-click the track → Always keep on this device, wait until it is fully downloaded, "
                 "then try again. If LiveVocoderCarriers is synced, sync locks can also block writing the .f32.";
+        }
+        if (run_on_wine && !ffmpeg_staged) {
+            err_out +=
+                "\n\nWine: conversion used your original file path (staging to %TEMP% failed). Try copying the "
+                "track to Z:\\tmp\\ under Wine, use Library… → carrier_smoketest.f32, or set LIVE_VOCODER_FFMPEG to a "
+                "PE ffmpeg.exe.";
         }
         std::filesystem::remove(err_log, ec_tmp);
         return false;

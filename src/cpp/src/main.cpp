@@ -171,7 +171,7 @@ static bool prepare_carrier_samples(const char* carrier_path, int sample_rate, s
     tmp_f32.clear();
     err_out.clear();
     std::filesystem::path use_path = carrier_path;
-    if (!carrier_path_is_raw_f32(use_path)) {
+    if (!carrier_file_is_raw_f32_carrier(use_path)) {
 #if defined(_WIN32)
         const unsigned pid_u = static_cast<unsigned>(_getpid());
 #else
@@ -230,9 +230,9 @@ int run_minimal_cpp_vocoder(char* argv0, const char* carrier_path, int sample_ra
     (void)argv0;
     std::filesystem::path tmp_f32;
     std::vector<double> carrier;
-    std::string err;
-    if (!prepare_carrier_samples(carrier_path, sample_rate, carrier, tmp_f32, err)) {
-        std::fprintf(stderr, "%s\n", err.c_str());
+    std::string load_err;
+    if (!prepare_carrier_samples(carrier_path, sample_rate, carrier, tmp_f32, load_err)) {
+        std::fprintf(stderr, "%s\n", load_err.c_str());
         return 1;
     }
 

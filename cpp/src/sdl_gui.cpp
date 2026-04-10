@@ -295,7 +295,7 @@ bool ingest_dropped_carrier(const std::filesystem::path& exe_dir, const std::fil
         return false;
     }
 
-    if (carrier_path_is_raw_f32(dropped_use)) {
+    if (carrier_file_is_raw_f32_carrier(dropped_use)) {
         const std::filesystem::path dest = lib / dropped_use.filename();
         ec.clear();
         if (std::filesystem::exists(dest)) {
@@ -1213,7 +1213,7 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
 #endif
         std::error_code ec;
         if (carrier_source_path_usable(cp, ec)) {
-            if (!carrier_path_is_raw_f32(cp)) {
+            if (!carrier_file_is_raw_f32_carrier(cp)) {
                 const std::filesystem::path lib = carrier_library_dir(exe_dir);
                 std::filesystem::create_directories(lib, ec);
                 std::filesystem::path stem = cp.stem();
@@ -1506,7 +1506,7 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
             sdl_show_themed_message_box(SDL_MESSAGEBOX_ERROR, "Live Vocoder", "Carrier file is not available.", window);
             return false;
         }
-        if (!carrier_path_is_raw_f32(cp)) {
+        if (!carrier_file_is_raw_f32_carrier(cp)) {
             const std::filesystem::path lib = carrier_library_dir(exe_dir);
             std::filesystem::create_directories(lib, fsec);
             std::filesystem::path stem = cp.stem();
@@ -1672,6 +1672,9 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
                 if (p != nullptr) {
                     std::string dropped = p;
                     SDL_free(p);
+                    while (!dropped.empty() && std::isspace(static_cast<unsigned char>(dropped.back()))) {
+                        dropped.pop_back();
+                    }
                     if (streaming) {
                         stop_stream();
                     }
