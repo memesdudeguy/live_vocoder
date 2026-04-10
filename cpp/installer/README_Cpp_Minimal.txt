@@ -11,8 +11,10 @@ GitHub Release with ``LiveVocoder-Setup.exe`` and ``LiveVocoder_Setup_5.0.exe``.
 What you get
 ------------
 LiveVocoder.exe, SDL2/PortAudio/FFTW runtime DLLs, optional DejaVu font under fonts\,
-and ffmpeg.exe when the installer or bundle included it. This build is the SDL GUI only
-(no Python/GTK/web stack).
+and **ffmpeg.exe** (required — the minimal installer always ships it next to the .exe).
+This build is the SDL GUI only (no Python/GTK/web stack). **Wine on Linux** is supported:
+use ``sh-LiveVocoder-Setup.sh`` / the generated ``.desktop``, or run the .exe under Wine;
+the app uses Windows ffmpeg.exe and host PipeWire via the installer’s Wine-only registry entries.
 
 
 Quick start (Windows)
@@ -50,6 +52,20 @@ If conversion fails:
 - Set environment variable LIVE_VOCODER_FFMPEG to the full path of ffmpeg.exe.
 
 Pre-converted .f32 carriers do not need ffmpeg.
+
+
+Troubleshooting carrier / ffmpeg
+---------------------------------
+**Native Windows**
+- If the error mentions **Wine** but you are on real Windows, you are on an **old LiveVocoder.exe** — reinstall from this **5.0** setup so you get CreateProcess ffmpeg + fixed messages.
+- Confirm both files exist: ``dir "C:\Program Files\Live Vocoder\LiveVocoder.exe" "C:\Program Files\Live Vocoder\ffmpeg.exe"``
+- OneDrive: source audio must be **fully downloaded** (not cloud-only).
+- Set ``LIVE_VOCODER_FFMPEG`` to a **full Windows path** to a known-good ffmpeg.exe (e.g. gyan.dev / BtbN builds) and restart the app.
+
+**Wine on Linux**
+- Use **Windows ffmpeg.exe** next to the app (the installer provides it). Do not point Wine at ``/usr/bin/ffmpeg``.
+- Prefer ``live-vocoder-wine-launch.sh`` or your distro’s launcher so ``PULSE_SINK`` / null sinks are set before ``wine``.
+- Carrier paths under ``Z:\`` are normal; the app keeps the Wine ffmpeg command path.
 
 
 Main controls
