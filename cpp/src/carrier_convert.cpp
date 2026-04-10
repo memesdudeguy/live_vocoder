@@ -276,9 +276,12 @@ static int carrier_win32_run_ffmpeg_createprocess(const std::wstring& ffmpeg_exe
     si.hStdOutput = nul_out;
     si.hStdError = errf;
     const std::wstring ar = std::to_wstring(sample_rate);
+    // Strip video/subtitle/data (MP3 “album art” is often an mjpeg stream). Without -vn, ffmpeg may try to
+    // mux video into raw f32le → "Unable to find a suitable output format". pcm_f32le matches our f32le pipe.
     std::wstring cmd = carrier_win32_quote_cmd_arg_w(ffmpeg_exe) +
                        L" -y -nostdin -hide_banner -loglevel info -i " + carrier_win32_quote_cmd_arg_w(src) +
-                       L" -f f32le -ac 1 -ar " + ar + L" " + carrier_win32_quote_cmd_arg_w(dst);
+                       L" -vn -sn -dn -map_metadata -1 -c:a pcm_f32le -f f32le -ac 1 -ar " + ar + L" " +
+                       carrier_win32_quote_cmd_arg_w(dst);
     std::vector<wchar_t> cmd_mut(cmd.begin(), cmd.end());
     cmd_mut.push_back(L'\0');
     std::wstring cwd_storage;
@@ -293,22 +296,17 @@ static int carrier_win32_run_ffmpeg_createprocess(const std::wstring& ffmpeg_exe
     PROCESS_INFORMATION pi{};
     const BOOL ok = CreateProcessW(nullptr, cmd_mut.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr,
                                      cwd_arg, &si, &pi);
+    CloseHandle(errf);
+    CloseHandle(nul_in);
+    CloseHandle(nul_out);
     if (!ok) {
-        CloseHandle(errf);
-        CloseHandle(nul_in);
-        CloseHandle(nul_out);
         return -998;
     }
-    // Wait before closing stdio handles: some Wine builds drop stderr if the parent closes ``errf`` immediately
-    // after CreateProcess (child may not have duplicated the handle yet).
     WaitForSingleObject(pi.hProcess, INFINITE);
     DWORD code = 1;
     (void)GetExitCodeProcess(pi.hProcess, &code);
     CloseHandle(pi.hProcess);
     CloseHandle(pi.hThread);
-    CloseHandle(errf);
-    CloseHandle(nul_in);
-    CloseHandle(nul_out);
     if (code > 255u) {
         return 1;
     }
@@ -396,16 +394,17 @@ static void carrier_win32_err_ffmpeg_failed_no_stderr(std::string& err_out) {
             " — unsupported format, unreadable path under Wine, or missing codec in ffmpeg.exe. "
             "Fix: put ffmpeg.exe next to LiveVocoder.exe (or set LIVE_VOCODER_FFMPEG), use Library… "
             "inside the app, or pre-convert on the host: "
-            "ffmpeg -y -i track.wav -f f32le -ac 1 -ar 48000 carrier.f32 then drop the .f32.";
+            "ffmpeg -y -i track.mp3 -vn -c:a pcm_f32le -f f32le -ac 1 -ar 48000 carrier.f32 then drop the .f32.";
         return;
     }
     err_out +=
         " — unsupported format, DRM-protected media, or this ffmpeg.exe build is missing the decoder "
         "(try a full Windows build from gyan.dev or BtbN GitHub releases). "
+        "MP3 with embedded album art can confuse older commands; this build passes -vn. "
         "If the file is in OneDrive, make sure it is downloaded (open once in Explorer, or Always keep on this device). "
         "The carriers folder existing only means ffmpeg can write the .f32 there; decoding still happens inside ffmpeg. "
         "Fix: set LIVE_VOCODER_FFMPEG to a fuller ffmpeg.exe, use WAV/FLAC, or pre-convert to .f32: "
-        "ffmpeg -y -i track.wav -f f32le -ac 1 -ar 48000 carrier.f32.";
+        "ffmpeg -y -i track.mp3 -vn -c:a pcm_f32le -f f32le -ac 1 -ar 48000 carrier.f32.";
 }
 
 #endif
@@ -514,42 +513,8 @@ bool carrier_ffmpeg_to_f32(int sample_rate, const std::filesystem::path& src,
     std::filesystem::create_directories(dst_f32.parent_path(), ec);
 
 #if defined(_WIN32)
-    // Stage in %TEMP% when CopyFile succeeds: OneDrive / long paths / Unicode segments often break ffmpeg or
-    // stderr capture under Wine; temp names are short and ASCII-heavy.
-    std::filesystem::path src_run = src;
-    std::filesystem::path dst_run = dst_f32;
-    std::filesystem::path tmp_in_path;
-    std::filesystem::path tmp_out_path;
-    bool ffmpeg_staged = false;
-    {
-        wchar_t tmp_root[MAX_PATH + 2];
-        const DWORD nt_root = GetTempPathW(static_cast<DWORD>(MAX_PATH), tmp_root);
-        if (nt_root > 0U && nt_root < static_cast<DWORD>(MAX_PATH)) {
-            std::wstring uniq = std::to_wstring(GetTickCount64());
-            uniq += L'_';
-            uniq += std::to_wstring(GetCurrentProcessId());
-            std::wstring ext = src.extension().wstring();
-            if (ext.empty()) {
-                ext = L".bin";
-            }
-            tmp_in_path = std::filesystem::path(std::wstring(tmp_root, static_cast<std::size_t>(nt_root))) /
-                          (std::wstring(L"lvoc_in_") + uniq + ext);
-            tmp_out_path = std::filesystem::path(std::wstring(tmp_root, static_cast<std::size_t>(nt_root))) /
-                           (std::wstring(L"lvoc_out_") + uniq + L".f32");
-            std::error_code abs_ec;
-            const std::filesystem::path src_abs = std::filesystem::absolute(src, abs_ec);
-            if (!abs_ec) {
-                if (CopyFileW(src_abs.wstring().c_str(), tmp_in_path.wstring().c_str(), FALSE) != 0) {
-                    src_run = tmp_in_path;
-                    dst_run = tmp_out_path;
-                    ffmpeg_staged = true;
-                }
-            }
-        }
-    }
-
-    const std::string src_s = ffmpeg_path_for_win32_ffmpeg_cmd(src_run);
-    const std::string dst_s = ffmpeg_path_for_win32_ffmpeg_cmd(dst_run);
+    const std::string src_s = ffmpeg_path_for_win32_ffmpeg_cmd(src);
+    const std::string dst_s = ffmpeg_path_for_win32_ffmpeg_cmd(dst_f32);
     const std::string ar_s = std::to_string(sample_rate);
 
     // Windows / Wine: host Linux ffmpeg is not runnable — need ffmpeg.exe on PATH, next to the exe,
@@ -598,9 +563,11 @@ bool carrier_ffmpeg_to_f32(int sample_rate, const std::filesystem::path& src,
         // Wine used to rely on ``system()`` + ``2>``; stderr often stayed empty (exit 1, useless UI). Native always used
         // CreateProcess above. If spawn failed or only a bare ``ffmpeg`` name resolved via PATH, fall back to cmd.
         if (ex == -1 && run_on_wine) {
-            const std::string cmd = quote_cmd_exe_arg(ffmpeg_exe) + " -y -nostdin -hide_banner -loglevel info -i " +
-                                    quote_cmd_exe_arg(src_s) + " -f f32le -ac 1 -ar " + ar_s + " " +
-                                    quote_cmd_exe_arg(dst_s) + " 2>" + quote_cmd_exe_arg(err_redir_target);
+            const std::string cmd =
+                quote_cmd_exe_arg(ffmpeg_exe) +
+                " -y -nostdin -hide_banner -loglevel info -i " + quote_cmd_exe_arg(src_s) +
+                " -vn -sn -dn -map_metadata -1 -c:a pcm_f32le -f f32le -ac 1 -ar " + ar_s + " " +
+                quote_cmd_exe_arg(dst_s) + " 2>" + quote_cmd_exe_arg(err_redir_target);
             const int r = std::system(cmd.c_str());
             if (r == -1) {
                 continue;
@@ -616,18 +583,10 @@ bool carrier_ffmpeg_to_f32(int sample_rate, const std::filesystem::path& src,
         exit_code = ex;
     }
     if (exit_code == -999) {
-        if (ffmpeg_staged) {
-            std::filesystem::remove(tmp_in_path, ec_tmp);
-            std::filesystem::remove(tmp_out_path, ec_tmp);
-        }
         carrier_win32_err_ffmpeg_not_run(err_out);
         return false;
     }
     if (exit_code != 0) {
-        if (ffmpeg_staged) {
-            std::filesystem::remove(tmp_in_path, ec_tmp);
-            std::filesystem::remove(tmp_out_path, ec_tmp);
-        }
         std::string detail = slurp_text_file_trunc(err_log, 900);
         err_out = "ffmpeg failed (exit " + std::to_string(exit_code) + ")";
         if (!detail.empty()) {
@@ -640,22 +599,6 @@ bool carrier_ffmpeg_to_f32(int sample_rate, const std::filesystem::path& src,
         return false;
     }
     std::filesystem::remove(err_log, ec_tmp);
-    if (ffmpeg_staged) {
-        std::filesystem::remove(tmp_in_path, ec_tmp);
-        std::filesystem::remove(dst_f32, ec_tmp);
-        std::error_code eren;
-        std::filesystem::rename(tmp_out_path, dst_f32, eren);
-        if (eren) {
-            std::filesystem::copy_file(tmp_out_path, dst_f32, std::filesystem::copy_options::overwrite_existing, eren);
-            std::filesystem::remove(tmp_out_path, ec_tmp);
-            if (eren) {
-                err_out =
-                    "could not place converted .f32 in the carriers folder (permissions, cloud sync locked the file, "
-                    "or disk full)";
-                return false;
-            }
-        }
-    }
 #else
     const std::string src_s = src.string();
     const std::string dst_s = dst_f32.string();
@@ -671,8 +614,9 @@ bool carrier_ffmpeg_to_f32(int sample_rate, const std::filesystem::path& src,
     if (pid == 0) {
         char ar_buf[32];
         std::snprintf(ar_buf, sizeof ar_buf, "%d", sample_rate);
-        execlp("ffmpeg", "ffmpeg", "-y", "-nostdin", "-hide_banner", "-loglevel", "error", "-i", src_s.c_str(), "-f",
-               "f32le", "-ac", "1", "-ar", ar_buf, dst_s.c_str(), reinterpret_cast<char*>(0));
+        execlp("ffmpeg", "ffmpeg", "-y", "-nostdin", "-hide_banner", "-loglevel", "error", "-i", src_s.c_str(), "-vn",
+               "-sn", "-dn", "-map_metadata", "-1", "-c:a", "pcm_f32le", "-f", "f32le", "-ac", "1", "-ar", ar_buf,
+               dst_s.c_str(), reinterpret_cast<char*>(0));
         _exit(127);
     }
     int st = 0;
