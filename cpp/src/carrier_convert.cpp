@@ -31,6 +31,19 @@ bool carrier_path_is_raw_f32(const std::filesystem::path& path) {
     return ext == ".f32";
 }
 
+bool carrier_source_path_usable(const std::filesystem::path& p, std::error_code& ec) {
+#if defined(_WIN32)
+    ec.clear();
+    const auto st = std::filesystem::status(p, ec);
+    if (ec) {
+        return false;
+    }
+    return std::filesystem::exists(st) && !std::filesystem::is_directory(st);
+#else
+    return std::filesystem::is_regular_file(p, ec);
+#endif
+}
+
 #if defined(_WIN32)
 static int carrier_hex_nibble(char c) {
     if (c >= '0' && c <= '9') {
@@ -422,6 +435,63 @@ static std::string slurp_text_file_trunc(const std::filesystem::path& path, std:
     return s;
 }
 
+/**
+ * Read/write copy for sources where ``CopyFileW`` fails (OneDrive cloud-only / placeholder / transient locks).
+ * Triggers hydration by reading the full stream.
+ */
+static bool carrier_win32_streaming_copy_file_w(const std::wstring& src, const std::wstring& dst) {
+    std::error_code ec;
+    std::filesystem::remove(std::filesystem::path(dst), ec);
+    HANDLE h_in =
+        CreateFileW(src.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
+                    OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
+    if (h_in == INVALID_HANDLE_VALUE) {
+        return false;
+    }
+    HANDLE h_out = CreateFileW(dst.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (h_out == INVALID_HANDLE_VALUE) {
+        CloseHandle(h_in);
+        return false;
+    }
+    char buf[262144];
+    for (;;) {
+        DWORD nread = 0;
+        if (!ReadFile(h_in, buf, static_cast<DWORD>(sizeof buf), &nread, nullptr)) {
+            CloseHandle(h_in);
+            CloseHandle(h_out);
+            DeleteFileW(dst.c_str());
+            return false;
+        }
+        if (nread == 0) {
+            break;
+        }
+        const char* p = buf;
+        DWORD left = nread;
+        while (left > 0) {
+            DWORD nw = 0;
+            if (!WriteFile(h_out, p, left, &nw, nullptr) || nw == 0) {
+                CloseHandle(h_in);
+                CloseHandle(h_out);
+                DeleteFileW(dst.c_str());
+                return false;
+            }
+            p += nw;
+            left -= nw;
+        }
+    }
+    CloseHandle(h_in);
+    CloseHandle(h_out);
+    return true;
+}
+
+static bool carrier_win32_path_may_be_onedrive(const std::filesystem::path& p) {
+    std::string g = p.generic_string();
+    for (char& c : g) {
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    }
+    return g.find("onedrive") != std::string::npos;
+}
+
 /** CMD ``2>`` redirection is more reliable when the path is short/ASCII (8.3 if Windows provides it). */
 static std::filesystem::path carrier_win32_short_path_for_cmd_redir(const std::filesystem::path& p) {
     std::wstring w = p.wstring();
@@ -623,13 +693,15 @@ bool carrier_ffmpeg_to_f32(int sample_rate, const std::filesystem::path& src,
     std::filesystem::create_directories(dst_f32.parent_path(), ec);
 
 #if defined(_WIN32)
-    // Stage in %TEMP% when CopyFile succeeds: OneDrive / long paths / Unicode segments often break ffmpeg or
-    // stderr capture under Wine; temp names are short and ASCII-heavy.
+    const bool run_on_wine = carrier_win32_running_under_wine();
+    // Stage in %TEMP% when copy succeeds: OneDrive placeholders often fail ``CopyFileW``; streaming read hydrates.
+    // Short ASCII temp names also help ffmpeg / stderr under Wine.
     std::filesystem::path src_run = src;
     std::filesystem::path dst_run = dst_f32;
     std::filesystem::path tmp_in_path;
     std::filesystem::path tmp_out_path;
     bool ffmpeg_staged = false;
+    bool onedrive_stage_failed = false;
     {
         wchar_t tmp_root[MAX_PATH + 2];
         const DWORD nt_root = GetTempPathW(static_cast<DWORD>(MAX_PATH), tmp_root);
@@ -648,7 +720,21 @@ bool carrier_ffmpeg_to_f32(int sample_rate, const std::filesystem::path& src,
             std::error_code abs_ec;
             const std::filesystem::path src_abs = std::filesystem::absolute(src, abs_ec);
             if (!abs_ec) {
-                if (CopyFileW(src_abs.wstring().c_str(), tmp_in_path.wstring().c_str(), FALSE) != 0) {
+                const std::wstring src_w = src_abs.wstring();
+                const std::wstring tmp_in_w = tmp_in_path.wstring();
+                bool staged_in = false;
+                if (CopyFileW(src_w.c_str(), tmp_in_w.c_str(), FALSE) != 0) {
+                    staged_in = true;
+                } else {
+                    std::error_code rem_ec;
+                    std::filesystem::remove(tmp_in_path, rem_ec);
+                    if (carrier_win32_streaming_copy_file_w(src_w, tmp_in_w)) {
+                        staged_in = true;
+                    } else if (!run_on_wine && carrier_win32_path_may_be_onedrive(src_abs)) {
+                        onedrive_stage_failed = true;
+                    }
+                }
+                if (staged_in) {
                     src_run = tmp_in_path;
                     dst_run = tmp_out_path;
                     ffmpeg_staged = true;
@@ -664,7 +750,6 @@ bool carrier_ffmpeg_to_f32(int sample_rate, const std::filesystem::path& src,
     // Windows / Wine: need Windows ffmpeg.exe. LIVE_VOCODER_FFMPEG is **native Windows only** (wide env + UTF-8
     // getenv fallback); ignored under Wine so users do not point at the host /usr/bin/ffmpeg by mistake.
     std::vector<std::wstring> ff_candidates;
-    const bool run_on_wine = carrier_win32_running_under_wine();
     if (!run_on_wine) {
         wchar_t evb[4096];
         const DWORD ne =
@@ -789,6 +874,12 @@ bool carrier_ffmpeg_to_f32(int sample_rate, const std::filesystem::path& src,
         } else {
             carrier_win32_err_ffmpeg_failed_no_stderr(err_out);
         }
+        if (onedrive_stage_failed) {
+            err_out +=
+                "\n\nOneDrive: the app could not copy your file into %TEMP% (often an online-only placeholder). "
+                "In Explorer, right-click the track → Always keep on this device, wait until it is fully downloaded, "
+                "then try again. If LiveVocoderCarriers is synced, sync locks can also block writing the .f32.";
+        }
         std::filesystem::remove(err_log, ec_tmp);
         return false;
     }
@@ -797,16 +888,31 @@ bool carrier_ffmpeg_to_f32(int sample_rate, const std::filesystem::path& src,
         std::filesystem::remove(tmp_in_path, ec_tmp);
         std::filesystem::remove(dst_f32, ec_tmp);
         std::error_code eren;
-        std::filesystem::rename(tmp_out_path, dst_f32, eren);
-        if (eren) {
-            std::filesystem::copy_file(tmp_out_path, dst_f32, std::filesystem::copy_options::overwrite_existing, eren);
-            std::filesystem::remove(tmp_out_path, ec_tmp);
-            if (eren) {
-                err_out =
-                    "could not place converted .f32 in the carriers folder (permissions, cloud sync locked the file, "
-                    "or disk full)";
-                return false;
+        bool placed = false;
+        for (int att = 0; att < 6 && !placed; ++att) {
+            if (att > 0) {
+                Sleep(static_cast<DWORD>(150 * att));
             }
+            eren.clear();
+            std::filesystem::rename(tmp_out_path, dst_f32, eren);
+            if (!eren) {
+                placed = true;
+                break;
+            }
+            eren.clear();
+            std::filesystem::copy_file(tmp_out_path, dst_f32, std::filesystem::copy_options::overwrite_existing, eren);
+            if (!eren) {
+                std::filesystem::remove(tmp_out_path, ec_tmp);
+                placed = true;
+                break;
+            }
+        }
+        if (!placed) {
+            std::filesystem::remove(tmp_out_path, ec_tmp);
+            err_out =
+                "could not place converted .f32 in the carriers folder (OneDrive/sync lock, permissions, or disk "
+                "full). Wait for sync to finish or save carriers outside the OneDrive-backed folder.";
+            return false;
         }
     }
 #else

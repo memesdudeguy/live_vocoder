@@ -7,6 +7,12 @@
 /** True if extension is .f32 (case-insensitive). */
 bool carrier_path_is_raw_f32(const std::filesystem::path& path);
 
+/**
+ * True if ``p`` exists and is not a directory. On Windows, OneDrive “online-only” files may fail
+ * ``is_regular_file`` until hydrated; this still returns true so conversion can open and recall them.
+ */
+bool carrier_source_path_usable(const std::filesystem::path& p, std::error_code& ec);
+
 #if defined(_WIN32)
 std::filesystem::path carrier_win32_localize_path_for_filesystem(const std::filesystem::path& raw);
 /** Shell "Documents" / My Documents (current path; honors folder relocation). Empty if unavailable. */

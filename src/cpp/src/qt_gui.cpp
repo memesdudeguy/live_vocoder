@@ -129,7 +129,7 @@ constexpr std::uintmax_t kMinCarrierF32Bytes = sizeof(float) * 64;
 
 bool carrier_f32_file_usable(const std::filesystem::path& p, std::error_code& ec) {
     ec.clear();
-    if (!std::filesystem::is_regular_file(p, ec)) {
+    if (!carrier_source_path_usable(p, ec)) {
         return false;
     }
     if (!carrier_path_is_raw_f32(p)) {
@@ -155,9 +155,17 @@ std::filesystem::path pick_default_carrier_f32(const std::filesystem::path& lib,
             if (ec) {
                 break;
             }
+#if defined(_WIN32)
+            std::error_code ec_ent;
+            const auto pst = ent.status(ec_ent);
+            if (!std::filesystem::exists(pst) || std::filesystem::is_directory(pst)) {
+                continue;
+            }
+#else
             if (!ent.is_regular_file()) {
                 continue;
             }
+#endif
             const std::filesystem::path& path = ent.path();
             if (!carrier_path_is_raw_f32(path)) {
                 continue;
@@ -661,7 +669,7 @@ private:
         cp = carrier_win32_localize_path_for_filesystem(cp);
 #endif
         std::error_code fsec;
-        if (!std::filesystem::is_regular_file(cp, fsec)) {
+        if (!carrier_source_path_usable(cp, fsec)) {
             QMessageBox::critical(this, QStringLiteral("Live Vocoder"), QStringLiteral("Carrier file is not available."));
             return false;
         }

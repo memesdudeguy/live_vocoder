@@ -206,7 +206,7 @@ constexpr std::uintmax_t kMinCarrierF32Bytes = sizeof(float) * 64;
 
 bool carrier_f32_file_usable(const std::filesystem::path& p, std::error_code& ec) {
     ec.clear();
-    if (!std::filesystem::is_regular_file(p, ec)) {
+    if (!carrier_source_path_usable(p, ec)) {
         return false;
     }
     if (!carrier_path_is_raw_f32(p)) {
@@ -233,9 +233,17 @@ std::filesystem::path pick_default_carrier_f32(const std::filesystem::path& lib,
             if (ec) {
                 break;
             }
+#if defined(_WIN32)
+            std::error_code ec_ent;
+            const auto pst = ent.status(ec_ent);
+            if (!std::filesystem::exists(pst) || std::filesystem::is_directory(pst)) {
+                continue;
+            }
+#else
             if (!ent.is_regular_file()) {
                 continue;
             }
+#endif
             const std::filesystem::path& path = ent.path();
             if (!carrier_path_is_raw_f32(path)) {
                 continue;
@@ -276,8 +284,8 @@ bool ingest_dropped_carrier(const std::filesystem::path& exe_dir, const std::fil
     const std::filesystem::path& dropped_use = dropped;
 #endif
     std::error_code ec;
-    if (!std::filesystem::is_regular_file(dropped_use, ec)) {
-        err = "not a regular file";
+    if (!carrier_source_path_usable(dropped_use, ec)) {
+        err = "not a readable file";
         return false;
     }
     const std::filesystem::path lib = carrier_library_dir(exe_dir);
@@ -1204,7 +1212,7 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
         cp = carrier_win32_localize_path_for_filesystem(cp);
 #endif
         std::error_code ec;
-        if (std::filesystem::is_regular_file(cp, ec)) {
+        if (carrier_source_path_usable(cp, ec)) {
             if (!carrier_path_is_raw_f32(cp)) {
                 const std::filesystem::path lib = carrier_library_dir(exe_dir);
                 std::filesystem::create_directories(lib, ec);
@@ -1494,7 +1502,7 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
         cp = carrier_win32_localize_path_for_filesystem(cp);
 #endif
         std::error_code fsec;
-        if (!std::filesystem::is_regular_file(cp, fsec)) {
+        if (!carrier_source_path_usable(cp, fsec)) {
             sdl_show_themed_message_box(SDL_MESSAGEBOX_ERROR, "Live Vocoder", "Carrier file is not available.", window);
             return false;
         }
