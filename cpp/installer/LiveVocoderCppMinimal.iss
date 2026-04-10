@@ -49,14 +49,14 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 Source: "LiveVocoder.ico"; DestDir: "{app}"; Flags: ignoreversion
+; App + carrier converter: both must land in the same directory ({app}) so LiveVocoder.exe finds sibling ffmpeg.exe.
 Source: "{#MinimalRoot}\LiveVocoder.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#MinimalRoot}\ffmpeg.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#MinimalRoot}\*.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#MinimalRoot}\app-icon.png"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "{#MinimalRoot}\fonts\DejaVuSans.ttf"; DestDir: "{app}\fonts"; Flags: ignoreversion skipifsourcedoesntexist
-Source: "{#MinimalRoot}\ffmpeg.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#MinimalRoot}\README_Cpp_Minimal.txt"; DestDir: "{app}"; DestName: "README.txt"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "{#MinimalRoot}\Run-from-QEMU-share.bat"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
-Source: "{#MinimalRoot}\Launch-LiveVocoder.bat"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 ; Per-user carrier library (matches SDL: %USERPROFILE%\Documents\LiveVocoderCarriers). Not removed on uninstall.
 Source: "CarriersFolderReadme.txt"; DestDir: "{userdocs}\LiveVocoderCarriers"; DestName: "README.txt"; Flags: ignoreversion uninsneveruninstall
 ; Linux host helper for running this Windows installer under Wine only — not used on real Windows.
