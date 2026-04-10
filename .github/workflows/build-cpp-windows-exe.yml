@@ -1,0 +1,74 @@
+# Native C++ vocoder: Windows PE .exe + MinGW DLLs (same folder runs on Windows and under Wine).
+name: Build C++ Windows EXE
+
+on:
+  workflow_dispatch:
+
+jobs:
+  mingw64:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-pkg-config
+            mingw-w64-x86_64-fftw
+            mingw-w64-x86_64-portaudio
+            mingw-w64-x86_64-SDL2
+            mingw-w64-x86_64-SDL2_ttf
+            mingw-w64-x86_64-ttf-dejavu
+            unzip
+
+      - name: Configure & build
+        shell: msys2 {0}
+        run: |
+          cd cpp
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release .
+          cmake --build build
+
+      - name: Bundle DLLs for portable folder
+        shell: msys2 {0}
+        run: bash cpp/bundle-mingw.sh
+
+      - name: Bundle SDL GUI font (DejaVu)
+        shell: msys2 {0}
+        run: |
+          mkdir -p cpp/dist-windows/fonts
+          cp -f /mingw64/share/fonts/TTF/DejaVuSans.ttf cpp/dist-windows/fonts/
+
+      - name: Full portable tree (embeddable Python + app) for installer
+        shell: msys2 {0}
+        run: |
+          mkdir -p cpp/dist-windows-cross
+          cp -a cpp/dist-windows/. cpp/dist-windows-cross/
+          cd cpp && bash bundle-dist-windows-cross-python.sh
+
+      - name: Install Inno Setup and build installer .exe
+        shell: powershell
+        run: |
+          choco install innosetup -y --no-progress
+          $iscc = Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            $iscc = Join-Path $env:ProgramFiles "Inno Setup 6\ISCC.exe"
+          }
+          if (-not (Test-Path $iscc)) { throw "ISCC.exe not found after choco install innosetup" }
+          & $iscc "$env:GITHUB_WORKSPACE\cpp\installer\LiveVocoder.iss"
+
+      - name: Upload portable folder (exe + DLLs + Python for Wine / Windows)
+        uses: actions/upload-artifact@v4
+        with:
+          name: LiveVocoder-windows
+          path: cpp/dist-windows-cross/
+
+      - name: Upload Inno Setup installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: LiveVocoder-setup
+          path: cpp/dist-installer/*.exe

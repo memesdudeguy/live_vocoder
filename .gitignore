@@ -1,0 +1,66 @@
+# --- Python ---
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+.Python
+*.egg
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+*.spec
+
+# PyInstaller / local packaging output (not cpp MinGW dist)
+/build/
+/dist/
+
+# --- Tests / tooling ---
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+
+# --- Logs & env ---
+*.log
+.env
+.env.*
+!.env.example
+
+# --- Editors & OS ---
+.idea/
+.vscode/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+
+# --- Backups ---
+*.bak
+
+# --- C++ (MinGW cross, MSYS, Inno) — regenerate: cpp/build-cross-windows.sh, cpp/build-installer-minimal.sh ---
+cpp/build/
+cpp/build-mingw-cross/
+cpp/build-native-test/
+cpp/dist-windows/
+cpp/dist-windows-cross/
+cpp/dist-installer/
+cpp/dist-windows-installer-minimal/
+
+# --- Standalone C++ tree (LiveVocoder/README.txt) ---
+LiveVocoder/build/
+LiveVocoder/build-mingw-cross/
+LiveVocoder/dist-windows-cross/
+LiveVocoder/dist-windows-installer-minimal/
+LiveVocoder/dist-installer/
+
+# --- Misc generated ---
+*.tmp
+.cache/
+
+# --- Wine test prefixes (do not commit WINEPREFIX trees) ---
+.wine_inno_test_prefix/
+**/.wine_inno_test_prefix/

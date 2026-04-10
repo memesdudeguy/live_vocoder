@@ -1,0 +1,57 @@
+# Real Windows PE .exes (same files work on native Windows and under Wine on Linux).
+# Actions → "Build Windows EXE" → Run workflow → download one or both artifacts.
+#
+#   LiveVocoder-exe       — self-contained (~hundreds of MB); best for Wine without Windows Python.
+#   RunLiveVocoder-exe    — small launcher; needs live_vocoder.py + .venv beside it (or parent folder).
+name: Build Windows EXE
+
+on:
+  workflow_dispatch:
+
+jobs:
+  full-app:
+    runs-on: windows-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install -U pip
+          pip install -r requirements.txt pyinstaller
+
+      - name: Build LiveVocoder.exe (bundled web UI)
+        run: python -m PyInstaller packaging\LiveVocoder.spec --clean --noconfirm
+
+      - name: Upload LiveVocoder.exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: LiveVocoder-exe
+          path: dist/LiveVocoder.exe
+
+  portable-launcher:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install -U pip
+          pip install -r requirements.txt pyinstaller
+
+      - name: Build RunLiveVocoder.exe
+        run: python -m PyInstaller packaging\PortableLauncher.spec --clean --noconfirm
+
+      - name: Upload RunLiveVocoder.exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: RunLiveVocoder-exe
+          path: dist/RunLiveVocoder.exe

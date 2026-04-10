@@ -1,0 +1,5 @@
+# Normalize line endings for scripts on checkout (optional; helps Windows clones).
+* text=auto
+
+*.sh text eol=lf
+*.command text eol=lf

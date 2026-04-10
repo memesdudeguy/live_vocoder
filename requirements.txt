@@ -1,0 +1,23 @@
+numpy>=1.24
+scipy>=1.10
+sounddevice>=0.4.6
+gradio>=4.44.0
+
+# --- Platform quick start ---
+# Linux:   ./run.sh --gtk-gui   (or pip install . && live-vocoder --gtk-gui)
+# Windows: run.bat              (web UI; add VB-Audio Cable + --virt-mic for other apps)
+# Windows .exe (full app, no extra files):  packaging\build-exe.bat  → dist\LiveVocoder.exe
+# Windows .exe (like run.bat, needs project files + Python once):  packaging\build-launcher-exe.bat  → dist\RunLiveVocoder.exe
+#   Put RunLiveVocoder.exe next to live_vocoder.py + requirements.txt; ffmpeg on PATH for MP3.
+# Linux/macOS + same EXE under Wine, or native Python:  chmod +x run-wine.sh && ./run-wine.sh
+# Native C++ vocoder LiveVocoder.exe (+ DLLs): Actions → "Build C++ Windows EXE" → LiveVocoder-windows
+# Python .exe (native Windows + same files under Wine): GitHub Actions → "Build Windows EXE"
+#   LiveVocoder-exe.zip      — full app LiveVocoder.exe
+#   RunLiveVocoder-exe.zip  — launcher RunLiveVocoder.exe
+# Local Windows: packaging\build-all-windows-exe.bat
+# macOS:   ./run-mac.command    (web UI unless brew GTK4 + PyGObject installed)
+# Debian:  ./packaging/build-deb.sh  → dist/*.deb  then  sudo apt install ./dist/*.deb
+# GTK GUI: put carrier MP3/WAV/FLAC in ~/Documents/LiveVocoderCarriers (created on first run).
+
+# System packages (Arch example), virtual mic + GTK — not all on pip:
+#   sudo pacman -S ffmpeg pipewire-alsa pipewire-pulse tk python-gobject gtk4
