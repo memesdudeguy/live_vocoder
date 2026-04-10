@@ -54,7 +54,7 @@ void lv_linux_wine_move_livevocoder_sink_input_after_pa_start();
  */
 void lv_linux_move_livevocoder_sink_input_after_pa_start();
 
-/** Wine on Linux: sync host PipeWire mute vs Monitor (full impl in LiveVocoder tree; stub here). */
+/** Wine on Linux: mute non–virt-sink playback when streaming with Monitor off (host pactl; mirrors native Linux). */
 void lv_win32_wine_pulse_sync_monitor_mute(bool streaming, bool monitor_on, bool virt_output);
 
 /**

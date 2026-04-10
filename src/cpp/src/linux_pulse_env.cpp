@@ -780,8 +780,30 @@ void lv_win32_wine_sync_speaker_monitor_loopback_impl(bool want_monitor, const c
 }
 
 /**
+ * Wine: mute/unmute all host sink-inputs that look like this app's playback (PipeWire labels often
+ * ``LiveVocoder.exe [audio stream…]``). Used when not on the null-sink virt route (Monitor off).
+ */
+static void win32_wine_pulse_set_livevocoder_sink_inputs_muted_impl(bool muted) {
+    if (!lv_win32_is_wine_host() || !win32_wine_pactl_cli_available()) {
+        return;
+    }
+    const std::string flag = muted ? "1" : "0";
+    const std::string inner =
+        "pactl list sink-inputs | awk "
+        "'/^Sink Input #[0-9]+/{if(s!=\"\"){if(hit)print s}"
+        "sub(/^Sink Input #/,\"\",$0);sub(/[^0-9].*/,\"\",$0);s=$0;hit=0;next}"
+        "/application\\.name = /&&(/[Ll]ive[Vv]ocoder|[Ll]ive [Vv]ocoder|[Pp]ort[Aa]udio|\\[audio stream/"
+        "){hit=1;next}"
+        "/media\\.name = /&&(/[Ll]ive[Vv]ocoder|[Ll]ive [Vv]ocoder|[Vv]ocoder/){hit=1;next}"
+        "END{if(s!=\"\"){if(hit)print s}}' | while read -r sid; do pactl set-sink-input-mute \"$sid\" " +
+        flag + " || true; done";
+    (void)win32_wine_bash_lc_exec(inner);
+}
+
+/**
  * Wine's pulse driver often ignores PULSE_SINK set from the PE after startup; host launcher env works.
- * After PortAudio opens "Speakers (PulseAudio Output)", move our sink-input to the null sink with pactl.
+ * After PortAudio opens "Speakers (PulseAudio Output)", move **every** matching playback sink-input to the null
+ * sink (PipeWire can expose multiple nodes; omitting one leaves audio on the default headphones sink).
  */
 static void lv_win32_wine_move_livevocoder_sink_input_to_pulse_sink_impl(const char* pulse_sink_name) {
     if (!lv_win32_is_wine_host() || pulse_sink_name == nullptr || pulse_sink_name[0] == '\0') {
@@ -795,21 +817,22 @@ static void lv_win32_wine_move_livevocoder_sink_input_to_pulse_sink_impl(const c
         return;
     }
     const std::string qsk = sh_single_quote_bash(sk);
-    // PipeWire: duplicate sink names break `pactl move-sink-input … <name>`; resolve numeric sink id in the same
-    // bash snapshot as the sink-input id. Sink-input often appears late under Wine; WASAPI/MMDev names differ from
-    // "Live Vocoder" on the host.
     for (int attempt = 0; attempt < 48; ++attempt) {
         Sleep(150);
-        // bash -lc wraps this in double quotes — do not use $'\t' (ANSI-C quoting fails there). Use a literal tab in awk FS.
         const std::string inner =
             std::string("sn=") + qsk +
-            ";sid=$(pactl list short sinks | awk -v w=\\\"$sn\\\" 'BEGIN{FS=\"\t\"} "
-            "{gsub(/^[ \\t]+|[ \\t]+$/,\"\",$2);if($2==w)i=$1}END{print i}');"
-            "id=$(pactl list sink-inputs | awk '/^Sink Input #[0-9]+/{sub(/^Sink Input #/,\"\",$0);"
-            "gsub(/[^0-9].*/,\"\",$0);sid=$0}"
-            "$0 ~ /application\\.name = / && $0 ~ /[Ll]ive[Vv]ocoder|[Ll]ive [Vv]ocoder|PortAudio|portaudio|[Ww]ine|"
-            "MMDev|Wasapi|WASAPI|[Pp]ulseAudio|ALSA plug-in|alsa\\.plug/{print sid;exit}');"
-            "if test -n \"$id\" && test -n \"$sid\"; then pactl move-sink-input \"$id\" \"$sid\"; fi";
+            ";ts=$(pactl list short sinks | awk -v w=\\\"$sn\\\" 'BEGIN{FS=\"\t\"} "
+            "{gsub(/^[ \\t]+|[ \\t]+$/,\"\",$2);if($2==w){print $1;exit}}');"
+            "test -n \"$ts\"||exit 0;"
+            "pactl list sink-inputs | awk -v tsid=\"$ts\" "
+            "'/^Sink Input #[0-9]+/{if(s!=\"\"){if(hit&&sk!=\"\"&&sk!=tsid)print s}"
+            "sub(/^Sink Input #/,\"\",$0);sub(/[^0-9].*/,\"\",$0);s=$0;sk=\"\";hit=0;next}"
+            "/^[ \\t]*Sink:/{line=$0;sub(/^[ \\t]*Sink:[ \\t]*/,\"\",line);sub(/[^0-9].*/,\"\",line);sk=line;next}"
+            "/application\\.name = /&&(/[Ll]ive[Vv]ocoder|[Ll]ive [Vv]ocoder|[Pp]ort[Aa]udio|\\[audio stream|"
+            "MMDev|[Ww]asapi|[Pp]ulseAudio|alsa\\.plug/){hit=1;next}"
+            "/media\\.name = /&&(/[Ll]ive[Vv]ocoder|[Ll]ive [Vv]ocoder|[Vv]ocoder/){hit=1;next}"
+            "END{if(s!=\"\"){if(hit&&sk!=\"\"&&sk!=tsid)print s}}' | while read -r mov; do pactl move-sink-input "
+            "\"$mov\" \"$ts\" || true; done";
         (void)win32_wine_bash_lc_exec(inner);
     }
 }
@@ -947,7 +970,12 @@ void lv_linux_pulse_set_own_playback_muted(bool muted) {
         "  next\n"
         "}\n"
         "index($0, \"application.name\") > 0 && "
-        "$0 ~ /LiveVocoder|livevocoder|Live Vocoder|PortAudio|portaudio/ {\n"
+        "$0 ~ /LiveVocoder|livevocoder|Live Vocoder|PortAudio|portaudio|\\[audio stream/ {\n"
+        "  gotname=1\n"
+        "  next\n"
+        "}\n"
+        "index($0, \"media.name\") > 0 && "
+        "$0 ~ /LiveVocoder|livevocoder|Live Vocoder|[Vv]ocoder/ {\n"
         "  gotname=1\n"
         "  next\n"
         "}\n"
@@ -1077,21 +1105,38 @@ void lv_linux_move_livevocoder_sink_input_after_pa_start() {
         usleep(110000);
         const std::string inner =
             std::string("export PATH=/usr/bin:/bin:$PATH\nsn=") + qsk +
-            ";sid=$(pactl list short sinks | awk -v w=\"$sn\" 'BEGIN{FS=\"\t\"} "
-            "{gsub(/^[ \\t]+|[ \\t]+$/,\"\",$2);if($2==w)i=$1}END{print i}');"
-            "id=$(pactl list sink-inputs | awk '/^Sink Input #[0-9]+/{sub(/^Sink Input #/,\"\",$0);"
-            "gsub(/[^0-9].*/,\"\",$0);sid=$0}"
-            "$0 ~ /application\\.name = / && $0 ~ /[Ll]ive[Vv]ocoder|[Ll]ive [Vv]ocoder|PortAudio|portaudio/{print sid;exit}');"
-            "if test -n \"$id\" && test -n \"$sid\"; then pactl move-sink-input \"$id\" \"$sid\"; fi";
+            ";ts=$(pactl list short sinks | awk -v w=\"$sn\" 'BEGIN{FS=\"\t\"} "
+            "{gsub(/^[ \\t]+|[ \\t]+$/,\"\",$2);if($2==w){print $1;exit}}');"
+            "test -n \"$ts\"||exit 0;"
+            "pactl list sink-inputs | awk -v tsid=\"$ts\" "
+            "'/^Sink Input #[0-9]+/{if(s!=\"\"){if(hit&&sk!=\"\"&&sk!=tsid)print s}"
+            "sub(/^Sink Input #/,\"\",$0);sub(/[^0-9].*/,\"\",$0);s=$0;sk=\"\";hit=0;next}"
+            "/^[ \\t]*Sink:/{line=$0;sub(/^[ \\t]*Sink:[ \\t]*/,\"\",line);sub(/[^0-9].*/,\"\",line);sk=line;next}"
+            "/application\\.name = /&&(/[Ll]ive[Vv]ocoder|[Ll]ive [Vv]ocoder|[Pp]ort[Aa]udio|\\[audio stream|"
+            "MMDev|[Ww]asapi|[Pp]ulseAudio|alsa\\.plug/){hit=1;next}"
+            "/media\\.name = /&&(/[Ll]ive[Vv]ocoder|[Ll]ive [Vv]ocoder|[Vv]ocoder/){hit=1;next}"
+            "END{if(s!=\"\"){if(hit&&sk!=\"\"&&sk!=tsid)print s}}' "
+            "| while read -r mov; do pactl move-sink-input \"$mov\" \"$ts\" || true; done";
         (void)std::system(("bash -lc " + lv_export_sh_single_quote_bash(inner)).c_str());
     }
 #endif
 }
 
 void lv_win32_wine_pulse_sync_monitor_mute(bool streaming, bool monitor_on, bool virt_output) {
+#if defined(_WIN32)
+    if (!lv_win32_is_wine_host() || !win32_wine_pactl_cli_available()) {
+        return;
+    }
+    if (virt_output || !streaming || monitor_on) {
+        win32_wine_pulse_set_livevocoder_sink_inputs_muted_impl(false);
+    } else {
+        win32_wine_pulse_set_livevocoder_sink_inputs_muted_impl(true);
+    }
+#else
     (void)streaming;
     (void)monitor_on;
     (void)virt_output;
+#endif
 }
 
 std::string lv_linux_pulse_virt_mic_status_line() {
