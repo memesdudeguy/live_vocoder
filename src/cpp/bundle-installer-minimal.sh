@@ -96,11 +96,13 @@ fi
 if [[ -f "${ROOT}/installer/Run-from-QEMU-share.bat" ]]; then
   cp -f "${ROOT}/installer/Run-from-QEMU-share.bat" "${DST}/"
 fi
-for _bat in Test-CarrierF32-VM-Once.bat Test-CarrierF32-VM-UntilOk.bat; do
-  if [[ -f "${ROOT}/installer/${_bat}" ]]; then
-    cp -f "${ROOT}/installer/${_bat}" "${DST}/"
-  fi
-done
+if [[ -f "${ROOT}/installer/SmokeValidateF32.bat" ]]; then
+  cp -f "${ROOT}/installer/SmokeValidateF32.bat" "${DST}/"
+fi
+if ! python3 "${ROOT}/installer/gen_smoke_carrier_f32.py" "${DST}/smoke_carrier.f32"; then
+  echo "bundle-installer-minimal: gen_smoke_carrier_f32.py failed (need python3)." >&2
+  exit 1
+fi
 if [[ -f "${ROOT}/installer/README_Cpp_Minimal.txt" ]]; then
   cp -f "${ROOT}/installer/README_Cpp_Minimal.txt" "${DST}/README_Cpp_Minimal.txt"
 else

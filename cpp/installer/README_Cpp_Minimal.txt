@@ -21,6 +21,13 @@ use ``sh-LiveVocoder-Setup.sh`` / the generated ``.desktop``, or run the .exe un
 the app uses Windows ffmpeg.exe and host PipeWire via the installer’s Wine-only registry entries.
 
 
+Smoke test (.f32 loads without starting audio)
+----------------------------------------------
+- **Windows / QEMU VM:** in the install folder (or SMB share), double-click **SmokeValidateF32.bat**, or run:
+  ``LiveVocoder.exe --validate-carrier "%ProgramFiles%\Live Vocoder\smoke_carrier.f32" 48000``
+  Exit **0** means the carrier file and vocoder initialized (same load path as the GUI).
+- **Linux dev tree:** ``./scripts/vm-wine-validate-f32-loop.sh`` (uses native ``cpp/build/LiveVocoder.exe`` when present; retries until success or max tries).
+
 Quick start (Windows)
 ---------------------
 1. Run ``LiveVocoder-Setup-Windows.exe`` and finish the wizard (or unzip/copy the whole folder).
@@ -79,7 +86,6 @@ Troubleshooting carrier / ffmpeg
 - Carrier paths under ``Z:\`` are normal; the app keeps the Wine ffmpeg command path.
 - **QEMU test VM:** the host shares ``dist-installer`` as ``\\10.0.2.4\qemu``. Run ``LiveVocoder-Setup-Windows.exe`` (see ``Run-from-QEMU-share.bat``), install, then run **LiveVocoder.exe** from the Start menu or ``Program Files``.
 - **Linux host:** use ``LiveVocoder-Setup-Wine.exe`` with Wine, or ``sh-LiveVocoder-Setup.sh`` / the generated ``.desktop`` next to the installers.
-- **VM / CI carrier test:** in the guest, from the folder that contains ``LiveVocoder.exe`` and ``ffmpeg.exe``, run ``Test-CarrierF32-VM-UntilOk.bat`` (loops until ffmpeg→``.f32``→load succeeds). On the host with Wine: ``./scripts/vm-carrier-f32-until-ok-wine.sh``.
 
 
 Main controls

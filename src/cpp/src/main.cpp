@@ -1,9 +1,8 @@
 /**
  * Main executable: SDL2 + PortAudio vocoder GUI by default (no GTK/Tk/web/Python GUI from this binary).
  * Author: memesdudeguy.
- * Optional headless paths:
- *   --carrier-pipeline-test carrier [sample_rate] — ffmpeg→f32→load only (VM/CI smoke test)
- *   --minimal-cpp carrier [sample_rate] — full PortAudio duplex (any audio ffmpeg reads, or raw .f32)
+ * Optional: --validate-carrier path [sample_rate] — load .f32 (or ffmpeg-convert), build vocoder, exit (no audio).
+ * Optional headless path: --minimal-cpp carrier [sample_rate]  (any audio ffmpeg reads, or raw .f32)
  *
  *   ./LiveVocoder.exe --minimal-cpp song.mp3
  *
@@ -166,70 +165,74 @@ static bool windows_argv_looks_like_gui_launch_only(int argc, char** argv) {
 }
 #endif
 
-unsigned lv_pid_u_for_temp() {
+/** Load carrier samples (ffmpeg → temp .f32 when needed). On failure prints ``err_out`` and removes temp file. */
+static bool prepare_carrier_samples(const char* carrier_path, int sample_rate, std::vector<double>& carrier,
+                                    std::filesystem::path& tmp_f32, std::string& err_out) {
+    tmp_f32.clear();
+    err_out.clear();
+    std::filesystem::path use_path = carrier_path;
+    if (!carrier_path_is_raw_f32(use_path)) {
 #if defined(_WIN32)
-    return static_cast<unsigned>(_getpid());
+        const unsigned pid_u = static_cast<unsigned>(_getpid());
 #else
-    return static_cast<unsigned>(getpid());
+        const unsigned pid_u = static_cast<unsigned>(getpid());
 #endif
+        tmp_f32 = std::filesystem::temp_directory_path() /
+                  ("live_vocoder_carrier_" + std::to_string(pid_u) + ".f32");
+        if (!carrier_ffmpeg_to_f32(sample_rate, use_path, tmp_f32, err_out)) {
+            return false;
+        }
+        use_path = tmp_f32;
+    }
+
+    try {
+        carrier = load_carrier_f32(use_path.string().c_str());
+    } catch (const std::exception& e) {
+        err_out = e.what();
+        if (!tmp_f32.empty()) {
+            std::error_code ec;
+            std::filesystem::remove(tmp_f32, ec);
+        }
+        return false;
+    }
+    return true;
 }
 
-/** ffmpeg → mono f32le temp file → load as carrier (no PortAudio / no stdin). For CI and VM smoke tests. */
-int run_carrier_pipeline_test(char* argv0, const char* carrier_path, int sample_rate) {
-    (void)argv0;
-    std::filesystem::path src(carrier_path);
-    std::filesystem::path tmp =
-        std::filesystem::temp_directory_path() /
-        ("live_vocoder_carrier_test_" + std::to_string(lv_pid_u_for_temp()) + ".f32");
+/** Exit 0 if carrier loads and vocoder constructs (no PortAudio / SDL). For CI, Wine, and VM smoke tests. */
+static int run_validate_carrier_only(const char* carrier_path, int sample_rate) {
+    std::vector<double> carrier;
+    std::filesystem::path tmp_f32;
     std::string err;
-    if (!carrier_ffmpeg_to_f32(sample_rate, src, tmp, err)) {
+    if (!prepare_carrier_samples(carrier_path, sample_rate, carrier, tmp_f32, err)) {
         std::fprintf(stderr, "%s\n", err.c_str());
         return 1;
     }
-    std::vector<double> carrier;
     try {
-        carrier = load_carrier_f32(tmp.string().c_str());
+        StreamingVocoderCpp test_voc(std::move(carrier), sample_rate, 2048, kHop);
+        (void)test_voc;
     } catch (const std::exception& e) {
-        std::fprintf(stderr, "%s\n", e.what());
+        std::fprintf(stderr, "vocoder: %s\n", e.what());
+        if (!tmp_f32.empty()) {
+            std::error_code ec;
+            std::filesystem::remove(tmp_f32, ec);
+        }
+        return 1;
+    }
+    if (!tmp_f32.empty()) {
         std::error_code ec;
-        std::filesystem::remove(tmp, ec);
-        return 1;
+        std::filesystem::remove(tmp_f32, ec);
     }
-    std::error_code ec;
-    std::filesystem::remove(tmp, ec);
-    if (carrier.size() < 64) {
-        std::fprintf(stderr, "carrier too short after load\n");
-        return 1;
-    }
-    std::printf("carrier-pipeline-test: OK (%zu samples)\n", carrier.size());
+    std::printf("validate-carrier: OK (%d Hz, vocoder ready)\n", sample_rate);
     return 0;
 }
 
 int run_minimal_cpp_vocoder(char* argv0, const char* carrier_path, int sample_rate) {
     (void)argv0;
     std::filesystem::path tmp_f32;
-    std::filesystem::path use_path = carrier_path;
-    if (!carrier_path_is_raw_f32(use_path)) {
-        const unsigned pid_u = lv_pid_u_for_temp();
-        tmp_f32 = std::filesystem::temp_directory_path() /
-                  ("live_vocoder_carrier_" + std::to_string(pid_u) + ".f32");
-        std::string err;
-        if (!carrier_ffmpeg_to_f32(sample_rate, use_path, tmp_f32, err)) {
-            std::fprintf(stderr, "%s\n", err.c_str());
-            return 1;
-        }
-        use_path = tmp_f32;
-    }
-
     std::vector<double> carrier;
-    try {
-        carrier = load_carrier_f32(use_path.string().c_str());
-    } catch (const std::exception& e) {
-        std::fprintf(stderr, "%s\n", e.what());
-        if (!tmp_f32.empty()) {
-            std::error_code ec;
-            std::filesystem::remove(tmp_f32, ec);
-        }
+    std::string err;
+    if (!prepare_carrier_samples(carrier_path, sample_rate, carrier, tmp_f32, err)) {
+        std::fprintf(stderr, "%s\n", err.c_str());
         return 1;
     }
 
@@ -322,11 +325,13 @@ int run_minimal_cpp_vocoder(char* argv0, const char* carrier_path, int sample_ra
 void print_usage(const char* argv0) {
     std::fprintf(stderr,
                   "Usage:\n"
+                  "  %s --validate-carrier <audio|.f32> [sample_rate=%d]\n"
+                  "                            Exit 0 if carrier loads (ffmpeg if needed) and vocoder builds; no audio.\n",
+                  argv0, kSr);
+    std::fprintf(stderr,
                   "  %s --minimal-cpp carrier [sample_rate=%d]\n"
-                  "                            Standalone C++ PortAudio vocoder (ffmpeg converts audio → f32le).\n"
-                  "  %s --carrier-pipeline-test carrier [sample_rate=%d]\n"
-                  "                            Convert + load carrier only (no audio devices); exit 0 if OK.\n",
-                  argv0, kSr, argv0, kSr);
+                  "                            Standalone C++ PortAudio vocoder (ffmpeg converts audio → f32le).\n",
+                  argv0, kSr);
     std::fprintf(stderr, "  Requires ffmpeg on PATH for non-.f32 files.\n");
 #ifdef LIVE_VOCODER_HAS_SDL2
     std::fprintf(stderr,
@@ -345,9 +350,13 @@ void print_usage(const char* argv0) {
 }  // namespace
 
 int lv_program_entry(int argc, char** argv) {
-    if (argc >= 3 && std::strcmp(argv[1], "--carrier-pipeline-test") == 0) {
+    if (argc >= 2 && std::strcmp(argv[1], "--validate-carrier") == 0) {
+        if (argc < 3) {
+            print_usage(argv[0]);
+            return 2;
+        }
         const int sr = (argc >= 4) ? std::atoi(argv[3]) : kSr;
-        return run_carrier_pipeline_test(argv[0], argv[2], sr);
+        return run_validate_carrier_only(argv[2], sr);
     }
     if (argc >= 2 && std::strcmp(argv[1], "--minimal-cpp") == 0) {
         if (argc < 3) {
