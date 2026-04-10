@@ -73,6 +73,10 @@
 #
 # One-shot “make it feel faster” (host must have RAM/CPUs to spare):
 #   LV_QEMU_FAST_PRESET=1 ./scripts/test-installer-qemu-win10.sh
+#
+# Carrier ffmpeg→.f32→load loop (in guest CMD, from the SMB folder next to LiveVocoder.exe):
+#   Test-CarrierF32-VM-UntilOk.bat
+# Host (same PE binaries, Wine): ./scripts/vm-carrier-f32-until-ok-wine.sh
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"

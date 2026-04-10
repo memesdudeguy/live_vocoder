@@ -79,6 +79,7 @@ Troubleshooting carrier / ffmpeg
 - Carrier paths under ``Z:\`` are normal; the app keeps the Wine ffmpeg command path.
 - **QEMU test VM:** the host shares ``dist-installer`` as ``\\10.0.2.4\qemu``. Run ``LiveVocoder-Setup-Windows.exe`` (see ``Run-from-QEMU-share.bat``), install, then run **LiveVocoder.exe** from the Start menu or ``Program Files``.
 - **Linux host:** use ``LiveVocoder-Setup-Wine.exe`` with Wine, or ``sh-LiveVocoder-Setup.sh`` / the generated ``.desktop`` next to the installers.
+- **VM / CI carrier test:** in the guest, from the folder that contains ``LiveVocoder.exe`` and ``ffmpeg.exe``, run ``Test-CarrierF32-VM-UntilOk.bat`` (loops until ffmpeg→``.f32``→load succeeds). On the host with Wine: ``./scripts/vm-carrier-f32-until-ok-wine.sh``.
 
 
 Main controls
