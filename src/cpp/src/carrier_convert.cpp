@@ -145,30 +145,6 @@ std::filesystem::path carrier_win32_documents_folder() {
     return {};
 }
 
-/** ``LiveVocoder.exe`` directory + ``ffmpeg.exe`` (for Wine / portable bundles without PATH). */
-static std::string lv_sibling_ffmpeg_exe() {
-    std::wstring wbuf(512, L'\0');
-    for (;;) {
-        const DWORD cap = static_cast<DWORD>(wbuf.size());
-        const DWORD n = GetModuleFileNameW(nullptr, wbuf.data(), cap);
-        if (n == 0) {
-            return {};
-        }
-        if (n < cap - 1) {
-            wbuf.resize(n);
-            break;
-        }
-        wbuf.resize(wbuf.size() * 2);
-    }
-    std::error_code ec;
-    const std::filesystem::path exe(wbuf);
-    const std::filesystem::path cand = exe.parent_path() / L"ffmpeg.exe";
-    if (std::filesystem::is_regular_file(cand, ec)) {
-        return cand.u8string();
-    }
-    return {};
-}
-
 static void lv_push_unique_ffmpeg_w(std::vector<std::wstring>& out, std::wstring s) {
     if (s.empty()) {
         return;
@@ -179,6 +155,32 @@ static void lv_push_unique_ffmpeg_w(std::vector<std::wstring>& out, std::wstring
         }
     }
     out.push_back(std::move(s));
+}
+
+/** ``LiveVocoder.exe`` directory: ``ffmpeg.exe`` and ``bin/ffmpeg.exe`` (portable / installer layouts). */
+static void lv_push_exe_adjacent_ffmpeg_w(std::vector<std::wstring>& out) {
+    std::wstring wbuf(512, L'\0');
+    for (;;) {
+        const DWORD cap = static_cast<DWORD>(wbuf.size());
+        const DWORD n = GetModuleFileNameW(nullptr, wbuf.data(), cap);
+        if (n == 0) {
+            return;
+        }
+        if (n < cap - 1) {
+            wbuf.resize(n);
+            break;
+        }
+        wbuf.resize(wbuf.size() * 2);
+    }
+    std::error_code ec;
+    const std::filesystem::path exe_dir = std::filesystem::path(wbuf).parent_path();
+    const std::filesystem::path adjacent[] = {exe_dir / L"ffmpeg.exe", exe_dir / L"bin" / L"ffmpeg.exe"};
+    for (const std::filesystem::path& cand : adjacent) {
+        const auto st = std::filesystem::status(cand, ec);
+        if (std::filesystem::exists(st) && !std::filesystem::is_directory(st)) {
+            lv_push_unique_ffmpeg_w(out, cand.lexically_normal().wstring());
+        }
+    }
 }
 
 /**
@@ -220,7 +222,8 @@ static std::wstring carrier_win32_quote_cmd_arg_w(const std::wstring& s) {
 static std::wstring carrier_win32_resolve_ffmpeg_exe_w(const std::string& cand_utf8) {
     std::error_code ec;
     const std::filesystem::path p = std::filesystem::u8path(cand_utf8).lexically_normal();
-    if (std::filesystem::is_regular_file(p, ec)) {
+    const auto pst = std::filesystem::status(p, ec);
+    if (std::filesystem::exists(pst) && !std::filesystem::is_directory(pst)) {
         return p.wstring();
     }
     std::wstring stem = p.filename().wstring();
@@ -531,6 +534,23 @@ void carrier_collect_library_entries(const std::filesystem::path& dir, std::vect
     });
 }
 
+/** True if ``p`` exists, is a file, and has enough bytes for a minimal mono f32 carrier. */
+static bool carrier_ffmpeg_output_usable(const std::filesystem::path& p, std::error_code& ec_out) {
+    ec_out.clear();
+    const auto st = std::filesystem::status(p, ec_out);
+    if (ec_out) {
+        return false;
+    }
+    if (!std::filesystem::exists(st) || std::filesystem::is_directory(st)) {
+        return false;
+    }
+    const std::uintmax_t sz = std::filesystem::file_size(p, ec_out);
+    if (ec_out) {
+        return false;
+    }
+    return sz >= sizeof(float) * 64;
+}
+
 void carrier_convert_audio_in_folder(int sample_rate, const std::filesystem::path& dir) {
     std::error_code ec;
     if (!std::filesystem::exists(dir, ec) || !std::filesystem::is_directory(dir, ec)) {
@@ -668,9 +688,7 @@ bool carrier_ffmpeg_to_f32(int sample_rate, const std::filesystem::path& src,
             }
         }
     }
-    if (const std::wstring sib = carrier_win32_resolve_ffmpeg_exe_w(lv_sibling_ffmpeg_exe()); !sib.empty()) {
-        lv_push_unique_ffmpeg_w(ff_candidates, sib);
-    }
+    lv_push_exe_adjacent_ffmpeg_w(ff_candidates);
     if (const std::wstring p1 = carrier_win32_resolve_ffmpeg_exe_w("ffmpeg.exe"); !p1.empty()) {
         lv_push_unique_ffmpeg_w(ff_candidates, p1);
     }
@@ -713,8 +731,9 @@ bool carrier_ffmpeg_to_f32(int sample_rate, const std::filesystem::path& src,
             }
             ex = cr;
         }
-        // Wine: if CreateProcess never produced a child exit (spawn / I/O failure), fall back to ``system()`` + ``2>``.
-        if (ex == -1 && run_on_wine) {
+        // Wine: also use ``system()`` + ``2>`` when CreateProcess reported failure — captures stderr where Wine
+        // drops inherited handles, and can succeed when spawn/stdio is flaky but cmd redirection works.
+        if (run_on_wine && ex != 0) {
             const std::string ff_u8 = std::filesystem::path(ffw).u8string();
             for (int recipe = 0; recipe < 3 && ex != 0; ++recipe) {
                 std::filesystem::remove(err_log, ec_tmp);
@@ -734,6 +753,14 @@ bool carrier_ffmpeg_to_f32(int sample_rate, const std::filesystem::path& src,
             }
         } else if (ex == -1) {
             continue;
+        }
+        if (ex == 0) {
+            std::error_code ec_out;
+            const std::filesystem::path out_check = ffmpeg_staged ? tmp_out_path : dst_run;
+            if (!carrier_ffmpeg_output_usable(out_check, ec_out)) {
+                std::filesystem::remove(out_check, ec_tmp);
+                ex = 1;
+            }
         }
         if (ex == 0) {
             exit_code = 0;
@@ -825,8 +852,12 @@ bool carrier_ffmpeg_to_f32(int sample_rate, const std::filesystem::path& src,
             return false;
         }
         if (WIFEXITED(st) && WEXITSTATUS(st) == 0) {
-            linux_ok = true;
-            break;
+            std::error_code ec_out;
+            if (carrier_ffmpeg_output_usable(dst_f32, ec_out)) {
+                linux_ok = true;
+                break;
+            }
+            std::filesystem::remove(dst_f32, ec);
         }
     }
     if (!linux_ok) {
@@ -836,14 +867,13 @@ bool carrier_ffmpeg_to_f32(int sample_rate, const std::filesystem::path& src,
 #endif
 
     ec.clear();
-    const auto dst_st = std::filesystem::status(dst_f32, ec);
-    if (!std::filesystem::exists(dst_st) || std::filesystem::is_directory(dst_st)) {
-        err_out = "ffmpeg produced no output file";
-        return false;
-    }
-    if (std::filesystem::file_size(dst_f32, ec) < sizeof(float) * 64) {
-        err_out = "converted carrier is too short";
+    std::error_code ec_usable;
+    if (!carrier_ffmpeg_output_usable(dst_f32, ec_usable)) {
         std::filesystem::remove(dst_f32, ec);
+        err_out =
+            "after ffmpeg exited successfully, the output .f32 was missing or too small (disk full, antivirus, "
+            "cloud sync locking the carriers folder, or a silent encoder failure). Try again or pre-convert with "
+            "ffmpeg manually.";
         return false;
     }
     return true;
