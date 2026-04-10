@@ -28,5 +28,7 @@ if not defined ISCC (
 
 "%ISCC%" "%~dp0installer\LiveVocoderCppMinimal.iss"
 if errorlevel 1 exit /b 1
-echo Installer: dist-installer\LiveVocoder_Cpp_Setup_*.exe
+"%ISCC%" /DWINEHOSTINSTALLER "%~dp0installer\LiveVocoderCppMinimal.iss"
+if errorlevel 1 exit /b 1
+echo Installers: dist-installer\LiveVocoder-Setup-Windows.exe  and  LiveVocoder-Setup-Wine.exe
 endlocal

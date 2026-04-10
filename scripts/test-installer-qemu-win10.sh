@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run a Windows 10 or **Windows 11** VM in QEMU to test LiveVocoder-Setup.exe on real Windows.
+# Run a Windows 10 or **Windows 11** VM in QEMU to test LiveVocoder-Setup-Windows.exe on real Windows.
 #
 # Windows 11 needs TPM 2.0 in the VM: install **swtpm** (Arch: sudo pacman -S swtpm). This script
 # starts swtpm automatically when the ISO filename looks like Win11 or when a marker file exists
@@ -34,7 +34,7 @@
 #   ./scripts/test-installer-qemu-win10.sh
 #
 # Args:
-#   [path/to/LiveVocoder-Setup.exe]   (default: <repo>/cpp/dist-installer/LiveVocoder-Setup.exe)
+#   [path/to/LiveVocoder-Setup-Windows.exe]   (default: <repo>/cpp/dist-installer/LiveVocoder-Setup-Windows.exe)
 # Env:
 #   WIN10_ISO / WIN11_ISO   path to Windows 10/11 installer ISO (required for --install if disk empty)
 #   WIN10_DISK         qcow2 path (default: ~/.cache/livevocoder-qemu/win10-test.qcow2)
@@ -76,7 +76,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-INSTALLER="${LV_INSTALLER:-$ROOT/cpp/dist-installer/LiveVocoder-Setup.exe}"
+INSTALLER="${LV_INSTALLER:-$ROOT/cpp/dist-installer/LiveVocoder-Setup-Windows.exe}"
 CACHE="${LV_QEMU_CACHE:-$HOME/.cache/livevocoder-qemu}"
 DISK="${WIN10_DISK:-$CACHE/win10-test.qcow2}"
 DISK_GB="${WIN10_DISK_GB:-64}"
@@ -392,7 +392,7 @@ else
   QEMU_ARGS+=(-device "nvme,id=lv_nvme,serial=livevocoder,bus=lv_rp_nvme")
   QEMU_ARGS+=(-device "nvme-ns,drive=nvme0,bus=lv_nvme,nsid=1,eui64=0,bootindex=1")
   QEMU_ARGS+=(-boot "order=c,menu=on")
-  echo "Starting Windows from disk. In the guest, open:  \\\\10.0.2.4\\qemu  → run LiveVocoder-Setup.exe" >&2
+  echo "Starting Windows from disk. In the guest, open:  \\\\10.0.2.4\\qemu  → run LiveVocoder-Setup-Windows.exe" >&2
   echo "If NVMe boot \"Not Found\" / PXE: LV_QEMU_RESET_OVMF_VARS=1 once, or ESC → Boot Manager → Windows Boot Manager." >&2
 fi
 

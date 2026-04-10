@@ -10,7 +10,7 @@
 #   ./scripts/test-installer-qemu-win10.sh
 #
 # Usage:
-#   ./scripts/test-installer-qemu.sh [path/to/LiveVocoder-Setup.exe]
+#   ./scripts/test-installer-qemu.sh [path/to/LiveVocoder-Setup-Wine.exe]
 # Env:
 #   LV_QEMU_PORT=9876   host HTTP port for the guest to fetch the installer
 #   LV_QEMU_RAM=6144    MB RAM
@@ -19,7 +19,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-INSTALLER="${1:-$ROOT/cpp/dist-installer/LiveVocoder-Setup.exe}"
+INSTALLER="${1:-$ROOT/cpp/dist-installer/LiveVocoder-Setup-Wine.exe}"
+INST_BN="$(basename "$INSTALLER")"
 PORT="${LV_QEMU_PORT:-9876}"
 RAM_MB="${LV_QEMU_RAM:-6144}"
 CPUS="${LV_QEMU_CPUS:-4}"
@@ -122,13 +123,13 @@ write_files:
       export WINEPREFIX=/home/debian/.wine
       export HOME=/home/debian
       echo "[lv] fetching installer from host..."
-      wget -q -O /tmp/LiveVocoder-Setup.exe "http://10.0.2.2:${PORT}/LiveVocoder-Setup.exe"
-      ls -la /tmp/LiveVocoder-Setup.exe
+      wget -q -O /tmp/${INST_BN} "http://10.0.2.2:${PORT}/${INST_BN}"
+      ls -la /tmp/${INST_BN}
       export DEBIAN_FRONTEND=noninteractive
       export WINEDEBUG=-all
       echo "[lv] running silent Inno under Wine (may take several minutes)..."
-      wine64 /tmp/LiveVocoder-Setup.exe /VERYSILENT /CURRENTUSER /SUPPRESSMSGBOXES /NORESTART \
-        || wine /tmp/LiveVocoder-Setup.exe /VERYSILENT /CURRENTUSER /SUPPRESSMSGBOXES /NORESTART \
+      wine64 /tmp/${INST_BN} /VERYSILENT /CURRENTUSER /SUPPRESSMSGBOXES /NORESTART \
+        || wine /tmp/${INST_BN} /VERYSILENT /CURRENTUSER /SUPPRESSMSGBOXES /NORESTART \
         || true
       echo "[lv] listing install dir (if any):"
       ls -la "/home/debian/.wine/drive_c/Program Files/Live Vocoder/" 2>/dev/null || true
@@ -217,7 +218,7 @@ else
   QEMU_ARGS+=(-serial stdio)
 fi
 
-echo "Starting QEMU (installer served at http://127.0.0.1:$PORT/LiveVocoder-Setup.exe)..." >&2
+echo "Starting QEMU (installer served at http://127.0.0.1:$PORT/$INST_BN)..." >&2
 echo "Workdir: $WORKDIR  |  Guest user: debian / debian  |  Poweroff after cloud-init (~10–25 min first boot)." >&2
 "$QEMU_BIN" "${QEMU_ARGS[@]}"
 echo "QEMU exited." >&2

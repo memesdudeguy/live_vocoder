@@ -1,12 +1,23 @@
 ; Inno Setup 6 — C++ SDL only (from cpp/). Stage: ../bundle-installer-minimal.sh
-; Compile (from LiveVocoder/): ./build-installer-minimal.sh  |  build-installer-minimal.bat
-; Output: ..\dist-installer\LiveVocoder_Cpp_Setup_<version>.exe
+; Compile twice for two outputs:
+;   ISCC LiveVocoderCppMinimal.iss
+;       → ..\dist-installer\LiveVocoder-Setup-Windows.exe  (native Windows)
+;   ISCC /DWINEHOSTINSTALLER LiveVocoderCppMinimal.iss
+;       → ..\dist-installer\LiveVocoder-Setup-Wine.exe     (run this .exe with Wine on Linux)
 ; https://jrsoftware.org/isinfo.php
 
 #define MyAppName "Live Vocoder"
 #define MyAppVersion "5.0"
 #define MyAppPublisher "memesdudeguy"
 #define MyAppExeName "LiveVocoder.exe"
+
+#ifdef WINEHOSTINSTALLER
+  #define MyOutputBase "LiveVocoder-Setup-Wine"
+  #define MyFlavorSuffix " — Wine host"
+#else
+  #define MyOutputBase "LiveVocoder-Setup-Windows"
+  #define MyFlavorSuffix " — Windows"
+#endif
 ; Linux: embedded shell paths (not bare "sh"/"bash" from PATH) for .desktop and host helpers.
 #define SetupEmbeddedShPrefix "/bin/sh"
 #define SetupEmbeddedBashPrefix "/bin/bash"
@@ -17,12 +28,12 @@ AppId=com.live_vocoder.LiveVocoder.cpp.sdl.x64
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
-AppVerName={#MyAppName} {#MyAppVersion} (C++)
+AppVerName={#MyAppName} {#MyAppVersion} (C++{#MyFlavorSuffix})
 AppCopyright=Copyright (C) {#MyAppPublisher}
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 OutputDir=..\dist-installer
-OutputBaseFilename=LiveVocoder-Setup
+OutputBaseFilename={#MyOutputBase}
 SetupIconFile=LiveVocoder.ico
 UninstallDisplayIcon={app}\LiveVocoder.ico
 Compression=lzma2/ultra64
@@ -49,14 +60,20 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 Source: "LiveVocoder.ico"; DestDir: "{app}"; Flags: ignoreversion
+; App + carrier converter: both must land in the same directory ({app}) so LiveVocoder.exe finds sibling ffmpeg.exe.
 Source: "{#MinimalRoot}\LiveVocoder.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#MinimalRoot}\ffmpeg.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#MinimalRoot}\*.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#MinimalRoot}\app-icon.png"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "{#MinimalRoot}\fonts\DejaVuSans.ttf"; DestDir: "{app}\fonts"; Flags: ignoreversion skipifsourcedoesntexist
-Source: "{#MinimalRoot}\ffmpeg.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#MinimalRoot}\README_Cpp_Minimal.txt"; DestDir: "{app}"; DestName: "README.txt"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "{#MinimalRoot}\Run-from-QEMU-share.bat"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 ; Per-user carrier library (matches SDL: %USERPROFILE%\Documents\LiveVocoderCarriers). Not removed on uninstall.
 Source: "CarriersFolderReadme.txt"; DestDir: "{userdocs}\LiveVocoderCarriers"; DestName: "README.txt"; Flags: ignoreversion uninsneveruninstall
+; Linux host helper for running the Wine-named installer from the install folder (optional).
+#ifdef WINEHOSTINSTALLER
+Source: "README_Wine_Installer.txt"; DestDir: "{app}"; DestName: "README_Wine.txt"; Flags: ignoreversion skipifsourcedoesntexist
+#endif
 ; Linux host helper for running this Windows installer under Wine only — not used on real Windows.
 Source: "sh-LiveVocoder-Setup.sh"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist; Check: IsRunningUnderWine
 

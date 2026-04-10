@@ -3,7 +3,7 @@
 #
 # Usage (from repo root):
 #   ./scripts/debug-vm-livevocoder.sh
-#   LV_INSTALLER=/path/to/LiveVocoder-Setup.exe ./scripts/debug-vm-livevocoder.sh
+#   LV_INSTALLER=/path/to/LiveVocoder-Setup-Windows.exe ./scripts/debug-vm-livevocoder.sh
 #
 # Host:
 #   - Tail QEMU log:  ls -t ~/.cache/livevocoder-qemu/qemu-debug-*.log | head -1 | xargs tail -f
