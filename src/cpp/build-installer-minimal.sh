@@ -7,6 +7,15 @@ mkdir -p "${ROOT}/dist-installer"
 
 bash "${ROOT}/bundle-installer-minimal.sh"
 
+if [[ ! -f "${ROOT}/dist-windows-installer-minimal/LiveVocoder.exe" ]]; then
+  echo "build-installer-minimal: missing dist-windows-installer-minimal/LiveVocoder.exe" >&2
+  exit 1
+fi
+if [[ ! -f "${ROOT}/dist-windows-installer-minimal/ffmpeg.exe" ]]; then
+  echo "build-installer-minimal: missing dist-windows-installer-minimal/ffmpeg.exe (required for carrier conversion on Windows)." >&2
+  exit 1
+fi
+
 if ! python3 "${ROOT}/installer/gen_livevocoder_ico.py"; then
   echo "Failed to build installer/LiveVocoder.ico (need python3 + Pillow or ffmpeg; assets/app-icon.webp)." >&2
   exit 1

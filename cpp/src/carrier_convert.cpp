@@ -281,9 +281,18 @@ static int carrier_win32_run_ffmpeg_createprocess(const std::wstring& ffmpeg_exe
                        L" -f f32le -ac 1 -ar " + ar + L" " + carrier_win32_quote_cmd_arg_w(dst);
     std::vector<wchar_t> cmd_mut(cmd.begin(), cmd.end());
     cmd_mut.push_back(L'\0');
+    std::wstring cwd_storage;
+    const wchar_t* cwd_arg = nullptr;
+    {
+        const std::filesystem::path ff_parent = std::filesystem::path(ffmpeg_exe).parent_path();
+        if (!ff_parent.empty()) {
+            cwd_storage = ff_parent.wstring();
+            cwd_arg = cwd_storage.c_str();
+        }
+    }
     PROCESS_INFORMATION pi{};
-    const BOOL ok =
-        CreateProcessW(nullptr, cmd_mut.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi);
+    const BOOL ok = CreateProcessW(nullptr, cmd_mut.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr,
+                                     cwd_arg, &si, &pi);
     CloseHandle(errf);
     CloseHandle(nul_in);
     CloseHandle(nul_out);

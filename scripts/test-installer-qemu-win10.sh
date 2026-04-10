@@ -45,6 +45,11 @@
 #   LV_QEMU_CPUS       vCPUs (default: 4)
 #   LV_QEMU_CPU        passed to -cpu (default: host + Hyper-V enlightenments for snappier Windows guests)
 #   LV_QEMU_DISK_FAST  1 (default) = qcow2 cache=writeback,discard=unmap on NVMe; 0 = plain drive line
+#   LV_QEMU_DISK_AIO   native (default) = lower qcow2 latency on Linux; threads = omit aio=native if unstable
+#   LV_QEMU_MISC_FAST  1 (default) = -rtc driftfix=slew + kvm-pit lost_tick_policy=discard (snappier Windows timers)
+#   LV_QEMU_FAST_PRESET 1 = set RAM=12288 CPUS=6 AUDIO=0 for a quicker interactive test (override with env below)
+#   LV_QEMU_DEBUG      1 = write QEMU trace to $LV_QEMU_CACHE/qemu-debug-*.log (-d guest_errors)
+#   LV_QEMU_MON        1 = QEMU monitor on telnet 127.0.0.1:5555 (commands: help, info status, log snapshot)
 #   LV_QEMU_DISPLAY    gtk | sdl | none | full gtk string, e.g. gtk,zoom-to-fit=on
 #                        default: gtk desktop window when DISPLAY or WAYLAND set, else sdl
 #   LV_QEMU_GTK_OPTS   extra gtk display options (default: zoom-to-fit=on)
@@ -65,20 +70,39 @@
 #   qemu-img info ~/.cache/livevocoder-qemu/win10-test.qcow2   # "disk size" tiny vs 64G virtual = empty
 # Install once:  WIN10_ISO=/path/to/Win11.iso ./scripts/test-installer-qemu-win10.sh --install
 # Stale NVRAM only:  LV_QEMU_RESET_OVMF_VARS=1 ./scripts/test-installer-qemu-win10.sh
+#
+# One-shot “make it feel faster” (host must have RAM/CPUs to spare):
+#   LV_QEMU_FAST_PRESET=1 ./scripts/test-installer-qemu-win10.sh
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 INSTALLER="${LV_INSTALLER:-$ROOT/cpp/dist-installer/LiveVocoder-Setup.exe}"
 CACHE="${LV_QEMU_CACHE:-$HOME/.cache/livevocoder-qemu}"
 DISK="${WIN10_DISK:-$CACHE/win10-test.qcow2}"
-RAM_MB="${LV_QEMU_RAM:-8192}"
-CPUS="${LV_QEMU_CPUS:-4}"
 DISK_GB="${WIN10_DISK_GB:-64}"
+case "${LV_QEMU_FAST_PRESET:-0}" in
+  1|true|yes)
+    RAM_MB="${LV_QEMU_RAM:-12288}"
+    CPUS="${LV_QEMU_CPUS:-6}"
+    export LV_QEMU_AUDIO="${LV_QEMU_AUDIO:-0}"
+    echo "test-installer-qemu-win10: LV_QEMU_FAST_PRESET=1 → RAM=${RAM_MB}M CPUs=${CPUS} LV_QEMU_AUDIO=${LV_QEMU_AUDIO:-0}" >&2
+    ;;
+  *)
+    RAM_MB="${LV_QEMU_RAM:-8192}"
+    CPUS="${LV_QEMU_CPUS:-4}"
+    ;;
+esac
 QEMU_CPU="${LV_QEMU_CPU:-host,hv_relaxed,hv_spinlocks=0x1fff,hv_vapic,hv_time}"
 DISK_NVME_EXTRA=""
 case "${LV_QEMU_DISK_FAST:-1}" in
   0|false|no) DISK_NVME_EXTRA="" ;;
   *) DISK_NVME_EXTRA=",cache=writeback,discard=unmap" ;;
+esac
+# aio=native needs cache.direct=on (QEMU rejects native AIO with writeback-only).
+DISK_AIO_EXTRA=""
+case "${LV_QEMU_DISK_AIO:-native}" in
+  threads) ;;
+  *) DISK_AIO_EXTRA=",cache.direct=on,aio=native" ;;
 esac
 
 # Alias: either variable can point at the Microsoft ISO.
@@ -276,10 +300,10 @@ QEMU_NET="user,id=net0,smb=$INSTALLER_DIR"
 # e1000e: works in Windows Setup without virtio drivers.
 QEMU_ARGS=(
   -enable-kvm
-  -machine "q35,accel=kvm"
+  -machine "q35,accel=kvm,kernel-irqchip=on"
   -cpu "$QEMU_CPU"
   -m "$RAM_MB"
-  -smp "$CPUS"
+  -smp "cpus=$CPUS,cores=$CPUS,threads=1,sockets=1"
   -netdev "$QEMU_NET"
   # Fixed PCI addrs: OVMF boot entries use Pci(0x3,0x0) for our NVMe root port — slot=5 broke that (Not Found).
   # e1000e must not share dev 3; 04.0 is a typical free slot on q35 root bus.
@@ -289,7 +313,14 @@ QEMU_ARGS=(
 )
 
 # Windows inbox NVMe driver — no extra storage driver during setup.
-QEMU_ARGS+=(-drive "file=$DISK,if=none,id=nvme0,format=qcow2${DISK_NVME_EXTRA}")
+QEMU_ARGS+=(-drive "file=$DISK,if=none,id=nvme0,format=qcow2${DISK_NVME_EXTRA}${DISK_AIO_EXTRA}")
+case "${LV_QEMU_MISC_FAST:-1}" in
+  0|false|no) ;;
+  *)
+    QEMU_ARGS+=(-global "kvm-pit.lost_tick_policy=discard")
+    QEMU_ARGS+=(-rtc "base=localtime,driftfix=slew")
+    ;;
+esac
 # NVMe behind a dedicated root port at bus 0 dev 3 fn 0 matches OVMF paths like …/Pci(0x3,0x0)/Pci(0x0,0x0)/NVMe…
 QEMU_ARGS+=(-device "pcie-root-port,id=lv_rp_nvme,bus=pcie.0,addr=03.0")
 # QEMU ≥6.1 auto-generates a non-zero namespace EUI; OVMF Boot0002 often stores NVMe(…,00-00-…-00).
@@ -425,7 +456,24 @@ if [[ "$LV_QEMU_AUDIO" == "1" ]]; then
   fi
 fi
 
-echo "Disk: $DISK  |  -display $QEMU_DISPLAY_SPEC  |  RAM: ${RAM_MB}M  |  -cpu ${QEMU_CPU}  |  nvme: format=qcow2${DISK_NVME_EXTRA}  |  audio: $AUDIO_SUMMARY  |  smbd: $(command -v smbd 2>/dev/null || echo none)" >&2
+case "${LV_QEMU_DEBUG:-0}" in
+  1|true|yes)
+    _qlog="$CACHE/qemu-debug-$(date +%Y%m%d-%H%M%S).log"
+    QEMU_ARGS+=(-D "$_qlog")
+    QEMU_ARGS+=(-d guest_errors)
+    echo "LV_QEMU_DEBUG: QEMU log file: $_qlog" >&2
+    echo "  In the guest (CMD): LiveVocoder.exe 2> \"%TEMP%\\lv-stderr.txt\"" >&2
+    echo "  List audio devices: set LIVE_VOCODER_PA_LIST_DEVICES=1 before starting LiveVocoder.exe" >&2
+    ;;
+esac
+case "${LV_QEMU_MON:-0}" in
+  1|true|yes)
+    QEMU_ARGS+=(-monitor "telnet:127.0.0.1:5555,server,nowait")
+    echo "LV_QEMU_MON: QEMU monitor →  telnet 127.0.0.1 5555   (try: help | info status | log snapshot)" >&2
+    ;;
+esac
+
+echo "Disk: $DISK  |  -display $QEMU_DISPLAY_SPEC  |  RAM: ${RAM_MB}M  |  smp: ${CPUS}c/1t  |  -cpu ${QEMU_CPU}  |  nvme: format=qcow2${DISK_NVME_EXTRA}${DISK_AIO_EXTRA}  |  misc_fast: ${LV_QEMU_MISC_FAST:-1}  |  audio: $AUDIO_SUMMARY  |  smbd: $(command -v smbd 2>/dev/null || echo none)" >&2
 "$QEMU_BIN" "${QEMU_ARGS[@]}"
 rc=$?
 cleanup_swtpm
