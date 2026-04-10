@@ -98,11 +98,6 @@ static bool carrier_win32_running_under_wine() {
     return false;
 }
 
-/** Wine-specific error wording only when ``wine.dll`` is loaded (real Wine). Native can still export ``wine_get_version`` shims. */
-static bool carrier_win32_wine_dll_loaded() {
-    return GetModuleHandleW(L"wine.dll") != nullptr;
-}
-
 std::filesystem::path carrier_win32_localize_path_for_filesystem(const std::filesystem::path& raw) {
     std::string g = raw.generic_string();
     if (g.compare(0, 7, "file://") == 0) {
@@ -427,22 +422,22 @@ static void carrier_win32_err_ffmpeg_not_run(std::string& err_out) {
     err_out =
         "could not run ffmpeg.exe. On Windows put ffmpeg.exe next to LiveVocoder.exe (installer does this), "
         "or add ffmpeg to PATH";
-    if (!carrier_win32_wine_dll_loaded()) {
+    if (!carrier_win32_running_under_wine()) {
         err_out += ", or set LIVE_VOCODER_FFMPEG to the full path to ffmpeg.exe (native Windows only; ignored under Wine)";
     }
     err_out += ". ";
-    if (carrier_win32_wine_dll_loaded()) {
+    if (carrier_win32_running_under_wine()) {
         err_out += "Under Wine on Linux you cannot use the host /usr/bin/ffmpeg — use Windows ffmpeg.exe. ";
     }
     err_out += "You can also use a pre-made .f32 carrier.";
 }
 
-/** When stderr capture is empty: native Windows gets accurate hints; Wine keeps the old wording. */
+/** When stderr capture is empty: native Windows gets DRM/OneDrive/LIVE_VOCODER hints; Wine gets a short Wine-specific line. */
 static void carrier_win32_err_ffmpeg_failed_no_stderr(std::string& err_out) {
-    if (carrier_win32_wine_dll_loaded()) {
+    if (carrier_win32_running_under_wine()) {
         err_out +=
             " — unsupported format, unreadable path under Wine, or missing codec in ffmpeg.exe. "
-            "Fix: put ffmpeg.exe next to LiveVocoder.exe, use Library… inside the app, or pre-convert on the host: "
+            "Fix: put Windows ffmpeg.exe next to LiveVocoder.exe, use Library… inside the app, or pre-convert on the host: "
             "ffmpeg -y -i track.mp3 -vn -f f32le -c:a pcm_f32le -ac 1 -ar 48000 carrier.f32 then drop the .f32. "
             "(LIVE_VOCODER_FFMPEG is ignored under Wine.)";
         return;
@@ -453,7 +448,8 @@ static void carrier_win32_err_ffmpeg_failed_no_stderr(std::string& err_out) {
         "MP3 with embedded album art can confuse older commands; this build passes -vn. "
         "If the file is in OneDrive, make sure it is downloaded (open once in Explorer, or Always keep on this device). "
         "The carriers folder existing only means ffmpeg can write the .f32 there; decoding still happens inside ffmpeg. "
-        "Fix: set LIVE_VOCODER_FFMPEG to a fuller ffmpeg.exe, use WAV/FLAC, or pre-convert to .f32: "
+        "Fix (native Windows only — not under Wine): set LIVE_VOCODER_FFMPEG to a fuller ffmpeg.exe, use WAV/FLAC, "
+        "or pre-convert to .f32:\n"
         "ffmpeg -y -i track.mp3 -vn -f f32le -c:a pcm_f32le -ac 1 -ar 48000 carrier.f32.";
 }
 
