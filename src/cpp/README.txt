@@ -16,8 +16,8 @@ Do not run ``cmake -B build .`` from inside ``cpp/build`` (that nests a wrong bu
 **Inno Setup .exe:** Installers are built **only on Windows** with ISCC (or Wine + Inno on Linux).
 On Linux, ``cmake --build … --target inno_installer`` does not write under ``dist-installer/``.
 Full portable tree: ``LiveVocoder_Setup_*.exe`` (``installer/LiveVocoder.iss``).
-**Minimal C++ only** (exe + DLLs, no Python): ``LiveVocoder_Cpp_Setup_*.exe`` via
-``build-installer-minimal.sh`` / ``build-installer-minimal.bat`` and ``installer/LiveVocoderCppMinimal.iss``.
+**Minimal C++ only** (exe + DLLs, no Python): ``LiveVocoder-Setup-Windows.exe`` and ``LiveVocoder-Setup-Wine.exe`` via
+``build-installer-minimal.sh`` / ``build-installer-minimal.bat`` and ``installer/LiveVocoderCppMinimal.iss`` (ISCC runs twice; Wine build adds ``/DWINEHOSTINSTALLER``).
 Download artifact **LiveVocoder-setup** from GitHub Actions, or read ``cpp/installer/README-LINUX.txt``.
 
 The built binary is always named ``LiveVocoder.exe`` (under ``cpp/build/`` or your CMake output dir). On Windows / MinGW it is a PE; on Linux/macOS it is still a native executable with an ``.exe`` suffix for consistency. Use the MinGW cross build under ``dist-windows-cross/`` when you need a Windows PE for real Windows or Wine.
