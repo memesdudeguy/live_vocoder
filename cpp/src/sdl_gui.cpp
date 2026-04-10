@@ -1670,10 +1670,11 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
                     std::filesystem::path stored;
                     std::string ierr;
                     if (!ingest_dropped_carrier(exe_dir, std::filesystem::path(dropped), stored, ierr)) {
-                        sdl_show_themed_message_box(SDL_MESSAGEBOX_ERROR, "Live Vocoder",
-                                                 ("Could not add carrier (ffmpeg required for non-.f32):\n" + ierr)
-                                                     .c_str(),
-                                                 window);
+                        sdl_show_themed_message_box(
+                            SDL_MESSAGEBOX_ERROR, "Live Vocoder — carrier conversion",
+                            ("Could not convert carrier to .f32 (bundled ffmpeg.exe next to LiveVocoder.exe):\n\n" + ierr)
+                                .c_str(),
+                            window);
                     } else {
                         carrier_path = stored.string();
                         carrier_label = stored.filename().string();
