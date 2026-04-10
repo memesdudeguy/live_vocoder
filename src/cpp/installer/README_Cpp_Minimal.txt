@@ -17,6 +17,8 @@ and **ffmpeg.exe** (required — the minimal installer always ships it next to t
 This build is the SDL GUI only (no Python/GTK/web stack). **Wine on Linux** is supported:
 use ``sh-LiveVocoder-Setup.sh`` / the generated ``.desktop``, or run the .exe under Wine;
 the app uses Windows ffmpeg.exe and host PipeWire via the installer’s Wine-only registry entries.
+**Native Windows** can auto-route playback to VB-Audio Virtual Cable (CABLE Input) when installed; **under Wine**
+that heuristic is off—use ``PULSE_SINK`` / null-sink routing on the Linux host instead.
 
 
 Smoke test (.f32 loads without starting audio)

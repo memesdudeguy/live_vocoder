@@ -707,11 +707,13 @@ std::string pa_windows_virt_mic_route_hint() {
     return {};
 #else
     if (lv_windows_is_wine_host()) {
-        return "Wine (Linux host): for PipeWire *_mic, set PULSE_SINK=live_vocoder when launching Wine/CrossOver, "
-               "or move this app’s playback to that sink in pavucontrol. Else use native Linux LiveVocoder.exe.";
+        return "Wine (Linux host): use PULSE_SINK / LIVE_VOCODER_PULSE_SINK (e.g. live_vocoder) when launching Wine, "
+               "or move playback to that null sink in pavucontrol / WirePlumber. VB-Audio Virtual Cable "
+               "auto-routing (CABLE Input/Output) applies on native Windows only, not under Wine. "
+               "LIVE_VOCODER_PA_LIST_DEVICES=1 lists devices; or run native Linux LiveVocoder.exe.";
     }
-    return "Native Windows + VB-Audio Virtual Cable: playback auto-selects **CABLE Input** (vocoder → cable). "
-           "In Discord, OBS, etc. choose **CABLE Output** as the microphone. Install from vb-audio.com if needed. "
+    return "Native Windows + VB-Audio Virtual Cable: playback auto-selects CABLE Input (vocoder → cable). "
+           "In Discord, OBS, etc. choose CABLE Output as the microphone. Install from vb-audio.com if needed. "
            "Overrides: LIVE_VOCODER_PA_OUTPUT / LIVE_VOCODER_PA_INPUT / *_INDEX; "
            "LIVE_VOCODER_DISABLE_VB_CABLE=1 uses normal default devices; LIVE_VOCODER_PA_LIST_DEVICES=1 lists names.";
 #endif
