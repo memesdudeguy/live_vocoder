@@ -590,10 +590,12 @@ bool pa_duplex_output_targets_virt_sink_route() {
         return true;
     }
 #endif
+    if (pa_output_device_is_pulse_pcm_virt_route(inf->name)) {
+        return true;
+    }
 #if defined(__linux__)
-    // pick_output_device() often selects the Pulse API *default* sink (human-readable name), not ALSA "pulse".
-    // libpulse still applies PULSE_SINK / LIVE_VOCODER_PULSE_SINK to that stream — same as null-sink / *_mic route.
-    // Without this, pulse_virt_sink_output stays false → Monitor off mutes the sink-input and kills virt mic capture.
+    // pick_output_device() often selects PulseAudio host API default (sink display name), not ALSA "pulse".
+    // Libpulse still honors PULSE_SINK → null sink; without this flag Monitor off zeros output and breaks *_mic.
     if (lv_env_pulse_sink_targets_virt_route()) {
         const PaHostApiIndex pulse_api = lv_find_pulse_host_api();
         if (pulse_api >= 0 && inf->hostApi == pulse_api) {
@@ -601,7 +603,7 @@ bool pa_duplex_output_targets_virt_sink_route() {
         }
     }
 #endif
-    return pa_output_device_is_pulse_pcm_virt_route(inf->name);
+    return false;
 }
 
 void pa_log_stream_devices(PaStream* stream) {
