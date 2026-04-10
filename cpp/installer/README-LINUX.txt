@@ -13,6 +13,10 @@ On Linux or macOS:
 Minimal C++ installer (exe + DLLs only, no bundled Python):
   - From cpp/: LV_BUNDLE_PYTHON=0 ./build-cross-windows.sh   then   ./build-installer-minimal.sh
   - Or on Windows: build-installer-minimal.bat (uses bundle-installer-minimal.bat + ISCC)
+  - On Linux: install Inno Setup 6 with Wine into your WINEPREFIX (default ~/.wine). The build
+    scripts look for ISCC.exe under both "Program Files (x86)/Inno Setup 6" and "Program Files/Inno Setup 6"
+    (32-bit vs 64-bit Inno installers use different folders).
+  - With CMake: if Wine + ISCC are found, `cmake --build build --target inno_installer` runs ISCC via Wine.
   - Output: dist-installer/LiveVocoder_Cpp_Setup_<version>.exe
   - Inno script: installer/LiveVocoderCppMinimal.iss
 

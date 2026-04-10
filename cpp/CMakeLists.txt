@@ -137,14 +137,40 @@ if(CMAKE_HOST_WIN32)
             COMMENT "inno_installer unavailable (ISCC missing)")
     endif()
 else()
-    # Always define the target so `cmake --build . --target inno_installer` is not "unknown target".
-    add_custom_target(inno_installer
-        COMMAND ${CMAKE_COMMAND} -E echo ""
-        COMMAND ${CMAKE_COMMAND} -E echo "=== inno_installer on non-Windows: no Setup.exe is created ==="
-        COMMAND ${CMAKE_COMMAND} -E echo "Inno Setup ISCC is Windows-only. dist-installer/ stays empty here."
-        COMMAND ${CMAKE_COMMAND} -E echo "Get LiveVocoderCpp_Setup_*.exe from GitHub Actions:"
-        COMMAND ${CMAKE_COMMAND} -E echo "  workflow Build C++ Windows EXE, artifact LiveVocoder-setup"
-        COMMAND ${CMAKE_COMMAND} -E echo "See cpp/installer/README-LINUX.txt"
-        COMMAND ${CMAKE_COMMAND} -E echo ""
-        COMMENT "inno_installer is Windows-only")
+    # Linux/macOS: optional Wine + Inno Setup 6 inside WINEPREFIX (same as build-installer.sh).
+    set(_LV_WINE_DRIVE_C "")
+    if(DEFINED ENV{WINEPREFIX} AND NOT "$ENV{WINEPREFIX}" STREQUAL "")
+        set(_LV_WINE_DRIVE_C "$ENV{WINEPREFIX}/drive_c")
+    elseif(DEFINED ENV{HOME} AND NOT "$ENV{HOME}" STREQUAL "")
+        set(_LV_WINE_DRIVE_C "$ENV{HOME}/.wine/drive_c")
+    endif()
+    set(_LV_INNO_ISCC "")
+    if(NOT _LV_WINE_DRIVE_C STREQUAL "")
+        foreach(_lv_sub
+                "Program Files (x86)/Inno Setup 6/ISCC.exe"
+                "Program Files/Inno Setup 6/ISCC.exe")
+            if(_LV_INNO_ISCC STREQUAL "" AND EXISTS "${_LV_WINE_DRIVE_C}/${_lv_sub}")
+                set(_LV_INNO_ISCC "${_LV_WINE_DRIVE_C}/${_lv_sub}")
+            endif()
+        endforeach()
+    endif()
+    find_program(LV_WINE_EXECUTABLE wine)
+    if(LV_WINE_EXECUTABLE AND NOT _LV_INNO_ISCC STREQUAL "")
+        add_custom_target(inno_installer
+            COMMAND "${LV_WINE_EXECUTABLE}" "${_LV_INNO_ISCC}"
+                    "${CMAKE_CURRENT_SOURCE_DIR}/installer/LiveVocoder.iss"
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/installer"
+            COMMENT "Wine+ISCC: LiveVocoder.iss → dist-installer/*.exe"
+            VERBATIM)
+        message(STATUS "Inno Setup: Wine ISCC found — run: cmake --build . --target inno_installer")
+    else()
+        add_custom_target(inno_installer
+            COMMAND ${CMAKE_COMMAND} -E echo ""
+            COMMAND ${CMAKE_COMMAND} -E echo "=== inno_installer: no native ISCC and no Wine+Inno found ==="
+            COMMAND ${CMAKE_COMMAND} -E echo "Install Inno Setup 6 in your WINEPREFIX, or run: cpp/build-installer.sh"
+            COMMAND ${CMAKE_COMMAND} -E echo "CI artifacts: workflow Build C++ Windows EXE, artifact LiveVocoder-setup"
+            COMMAND ${CMAKE_COMMAND} -E echo "See cpp/installer/README-LINUX.txt"
+            COMMAND ${CMAKE_COMMAND} -E echo ""
+            COMMENT "inno_installer needs Windows ISCC or Wine + Inno Setup 6")
+    endif()
 endif()

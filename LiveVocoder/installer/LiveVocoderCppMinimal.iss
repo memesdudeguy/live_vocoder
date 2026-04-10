@@ -70,6 +70,14 @@ Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; Description: "Launch {#M
 Type: files; Name: "{app}\cpp_gui_launch_log.txt"
 
 [Code]
+{ Same Wine detection as LiveVocoder.exe: pa_duplex.cpp / linux_pulse_env.cpp use
+  GetModuleHandleA("ntdll.dll") + GetProcAddress(..., "wine_get_version").
+  Use Int64 for handles — LongWord truncates on 64-bit and breaks Wine detection. }
+function GetModuleHandleA(lpModuleName: PAnsiChar): Int64;
+external 'GetModuleHandleA@kernel32.dll stdcall';
+
+function GetProcAddress(hModule: Int64; lpProcName: PAnsiChar): Int64;
+external 'GetProcAddress@kernel32.dll stdcall';
 
 function FindHostSh: String;
 begin
@@ -91,16 +99,12 @@ begin
     Result := '';
 end;
 
-function FindHostShell: String;
-begin
-  Result := FindHostSh;
-  if Result = '' then
-    Result := FindHostBash;
-end;
-
 function IsRunningUnderWine: Boolean;
+var
+  Ntdll: Int64;
 begin
-  Result := (FindHostShell <> '');
+  Ntdll := GetModuleHandleA('ntdll.dll');
+  Result := (Ntdll <> 0) and (GetProcAddress(Ntdll, 'wine_get_version') <> 0);
 end;
 
 procedure WineRunHostHelper(const HelperBody: String);

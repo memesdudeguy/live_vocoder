@@ -38,12 +38,20 @@ if [[ -n "$iscc" ]]; then
   "$iscc" "${ROOT}/installer/LiveVocoderCppMinimal.iss"
 else
   _wp="${WINEPREFIX:-$HOME/.wine}"
-  _wiscc="$_wp/drive_c/Program Files (x86)/Inno Setup 6/ISCC.exe"
-  if [[ -f "$_wiscc" ]] && command -v wine >/dev/null 2>&1; then
+  _wiscc=""
+  for _sub in \
+    "Program Files (x86)/Inno Setup 6/ISCC.exe" \
+    "Program Files/Inno Setup 6/ISCC.exe"; do
+    if [[ -f "$_wp/drive_c/$_sub" ]]; then
+      _wiscc="$_wp/drive_c/$_sub"
+      break
+    fi
+  done
+  if [[ -n "$_wiscc" ]] && command -v wine >/dev/null 2>&1; then
     echo "Using Wine: $_wiscc" >&2
     (cd "${ROOT}/installer" && wine "$_wiscc" LiveVocoderCppMinimal.iss)
   else
-    echo "ISCC.exe not found. Install Inno Setup 6 or Wine + Inno. See installer/README-INSTALLER.txt" >&2
+    echo "ISCC.exe not found. Install Inno Setup 6 under Wine (see cpp/installer/README-LINUX.txt)." >&2
     exit 1
   fi
 fi

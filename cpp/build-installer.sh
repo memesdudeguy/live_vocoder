@@ -44,13 +44,21 @@ if [[ -n "$iscc" ]]; then
   "$iscc" "$ROOT/installer/LiveVocoder.iss"
 else
   _wp="${WINEPREFIX:-$HOME/.wine}"
-  _wiscc="$_wp/drive_c/Program Files (x86)/Inno Setup 6/ISCC.exe"
-  if [[ -f "$_wiscc" ]] && command -v wine >/dev/null 2>&1; then
+  _wiscc=""
+  for _sub in \
+    "Program Files (x86)/Inno Setup 6/ISCC.exe" \
+    "Program Files/Inno Setup 6/ISCC.exe"; do
+    if [[ -f "$_wp/drive_c/$_sub" ]]; then
+      _wiscc="$_wp/drive_c/$_sub"
+      break
+    fi
+  done
+  if [[ -n "$_wiscc" ]] && command -v wine >/dev/null 2>&1; then
     echo "Using Wine: $_wiscc" >&2
     (cd "$ROOT/installer" && wine "$_wiscc" LiveVocoder.iss)
   else
-    echo "ISCC.exe not found (Windows paths or PATH), and no Wine Inno at:" >&2
-    echo "  $_wiscc" >&2
+    echo "ISCC.exe not found (Windows paths or PATH), and no Wine Inno under:" >&2
+    echo "  $_wp/drive_c/Program Files (x86)/Inno Setup 6/  or  .../Program Files/..." >&2
     echo "Install Inno Setup 6: https://jrsoftware.org/isinfo.php" >&2
     exit 1
   fi
