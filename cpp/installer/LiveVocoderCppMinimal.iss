@@ -30,7 +30,7 @@ SolidCompression=yes
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 DisableProgramGroupPage=yes
-; "dialog" can pop a GUI even when /VERYSILENT is passed (bad for Wine/CI); use /CURRENTUSER or /ALLUSERS to pick install mode.
+; commandline: /CURRENTUSER or /ALLUSERS without a GUI prompt (needed for /VERYSILENT under Wine).
 PrivilegesRequiredOverridesAllowed=commandline
 UsedUserAreasWarning=no
 WizardStyle=modern
@@ -70,15 +70,8 @@ Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; Description: "Launch {#M
 Type: files; Name: "{app}\cpp_gui_launch_log.txt"
 
 [Code]
-{ Same Wine detection as LiveVocoder.exe: pa_duplex.cpp / linux_pulse_env.cpp use
-  GetModuleHandleA("ntdll.dll") + GetProcAddress(..., "wine_get_version").
-  Int64 holds full HMODULE on 64-bit; LongWord truncates and makes Wine detection always false. }
-function GetModuleHandleA(lpModuleName: PAnsiChar): Int64;
-external 'GetModuleHandleA@kernel32.dll stdcall';
-
-function GetProcAddress(hModule: Int64; lpProcName: PAnsiChar): Int64;
-external 'GetProcAddress@kernel32.dll stdcall';
-
+{ Wine host integration uses Z:\usr\bin\bash (Wine maps Z: to /. Do not use GetProcAddress(ntdll,wine_get_version)
+  here: it can access-violate under Wine during ssPostInstall while the C++ app still uses that check at runtime. }
 function FindHostSh: String;
 begin
   if FileExists('Z:\usr\bin\sh') then
@@ -100,11 +93,8 @@ begin
 end;
 
 function IsRunningUnderWine: Boolean;
-var
-  Ntdll: Int64;
 begin
-  Ntdll := GetModuleHandleA('ntdll.dll');
-  Result := (Ntdll <> 0) and (GetProcAddress(Ntdll, 'wine_get_version') <> 0);
+  Result := (FindHostBash <> '');
 end;
 
 procedure WineRunHostHelper(const HelperBody: String);
@@ -148,10 +138,15 @@ begin
 end;
 
 procedure InstallWineLauncherScript;
+var
+  AppDirWin: String;
 begin
+  AppDirWin := ExpandConstant('{app}');
   WineRunHostHelper(
+    'export PATH=/usr/bin:/bin:$PATH' + #10 +
     'WP="${WINEPREFIX:-$HOME/.wine}"' + #10 +
-    'AD="$WP/drive_c/Program Files/Live Vocoder"' + #10 +
+    'AD=$(WINEPREFIX="$WP" winepath -u "' + AppDirWin + '" 2>/dev/null || true)' + #10 +
+    'if [ -z "$AD" ] || [ ! -d "$AD" ]; then AD="$WP/drive_c/Program Files/Live Vocoder"; fi' + #10 +
     'SH="$AD/live-vocoder-wine-launch.sh"' + #10 +
     'DT="$AD/LiveVocoder_Wine.desktop"' + #10 +
     'EXE="$AD/LiveVocoder.exe"' + #10 +
@@ -162,8 +157,8 @@ begin
     'SINK_NAME="live_vocoder"' + #10 +
     'MIC_NAME="${SINK_NAME}_mic"' + #10 +
     'MON_NAME="${SINK_NAME}.monitor"' + #10 +
-    'WP="${WINEPREFIX:-$HOME/.wine}"' + #10 +
-    'EXE="$WP/drive_c/Program Files/Live Vocoder/LiveVocoder.exe"' + #10 +
+    'SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"' + #10 +
+    'EXE="$SCRIPT_DIR/LiveVocoder.exe"' + #10 +
     'if [ ! -f "$EXE" ]; then echo "LiveVocoder.exe not found: $EXE" >&2; exit 1; fi' + #10 +
     'if command -v pactl >/dev/null 2>&1; then' + #10 +
     '  # Purge all LiveVocoder PipeWire modules (duplicates + canonical), then recreate one stack below.' + #10 +
@@ -250,12 +245,21 @@ procedure WineLaunchApp;
 var
   BashExe: String;
   ResultCode: Integer;
+  Entry: String;
+  AppDirWin: String;
 begin
   BashExe := FindHostBash;
   if BashExe = '' then
     Exit;
-  Exec(BashExe, '-c "WP=${WINEPREFIX:-$HOME/.wine}; exec ' + ExpandConstant('{#SetupEmbeddedBashPrefix}') +
-       ' \"$WP/drive_c/Program Files/Live Vocoder/live-vocoder-wine-launch.sh\""',
+  AppDirWin := ExpandConstant('{app}');
+  Entry := '#!/bin/bash' + #10 +
+    'export PATH=/usr/bin:/bin:$PATH' + #10 +
+    'WP="${WINEPREFIX:-$HOME/.wine}"' + #10 +
+    'AD=$(WINEPREFIX="$WP" winepath -u "' + AppDirWin + '" 2>/dev/null || true)' + #10 +
+    'if [ -z "$AD" ]; then AD="$WP/drive_c/Program Files/Live Vocoder"; fi' + #10 +
+    'exec ' + ExpandConstant('{#SetupEmbeddedBashPrefix}') + ' "$AD/live-vocoder-wine-launch.sh"' + #10;
+  SaveStringToFile('Z:\tmp\lv_wine_launch_entry.sh', Entry, False);
+  Exec(BashExe, '-c "chmod +x /tmp/lv_wine_launch_entry.sh && exec bash /tmp/lv_wine_launch_entry.sh"',
        '', SW_HIDE, ewNoWait, ResultCode);
 end;
 
@@ -273,26 +277,27 @@ end;
 
 procedure CurPageChanged(CurPageID: Integer);
 begin
-  { WizardForm is not shown under /SILENT or /VERYSILENT — touching it can misbehave on Wine. }
-  if WizardSilent then
-    Exit;
-  if (CurPageID = wpFinished) and IsRunningUnderWine then
-    WizardForm.RunList.Visible := False;
+  { Touching WizardForm during /SILENT or /VERYSILENT can surface the wizard on Wine. }
+  if CurPageID = wpFinished then
+  begin
+    if IsRunningUnderWine and (not WizardSilent) then
+      WizardForm.RunList.Visible := False;
+  end;
 end;
 
 function ShouldSkipPage(PageID: Integer): Boolean;
 begin
-  Result := False;
-  { Skip Finished under /SILENT or /VERYSILENT so setup exits without a blocking window (Wine often still showed it). }
-  if (PageID = wpFinished) and WizardSilent then
-    Result := True;
+  { Silent installs should exit without a Finish page (otherwise automation hangs under Wine). }
+  Result := (PageID = wpFinished) and WizardSilent;
 end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;
 begin
   Result := True;
-  if WizardSilent then
-    Exit;
-  if (CurPageID = wpFinished) and IsRunningUnderWine then
-    WineLaunchApp;
+  if CurPageID = wpFinished then
+  begin
+    { Do not auto-launch when unattended; same flags hide the Finish page via ShouldSkipPage. }
+    if IsRunningUnderWine and (not WizardSilent) then
+      WineLaunchApp;
+  end;
 end;
