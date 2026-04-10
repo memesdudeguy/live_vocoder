@@ -56,6 +56,7 @@ Source: "{#MinimalRoot}\fonts\DejaVuSans.ttf"; DestDir: "{app}\fonts"; Flags: ig
 Source: "{#MinimalRoot}\ffmpeg.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#MinimalRoot}\README_Cpp_Minimal.txt"; DestDir: "{app}"; DestName: "README.txt"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "{#MinimalRoot}\Run-from-QEMU-share.bat"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "{#MinimalRoot}\Launch-LiveVocoder.bat"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 ; Per-user carrier library (matches SDL: %USERPROFILE%\Documents\LiveVocoderCarriers). Not removed on uninstall.
 Source: "CarriersFolderReadme.txt"; DestDir: "{userdocs}\LiveVocoderCarriers"; DestName: "README.txt"; Flags: ignoreversion uninsneveruninstall
 ; Linux host helper for running this Windows installer under Wine only — not used on real Windows.

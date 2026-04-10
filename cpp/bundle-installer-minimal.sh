@@ -96,6 +96,9 @@ fi
 if [[ -f "${ROOT}/installer/Run-from-QEMU-share.bat" ]]; then
   cp -f "${ROOT}/installer/Run-from-QEMU-share.bat" "${DST}/"
 fi
+if [[ -f "${ROOT}/installer/Launch-LiveVocoder.bat" ]]; then
+  cp -f "${ROOT}/installer/Launch-LiveVocoder.bat" "${DST}/"
+fi
 if [[ -f "${ROOT}/installer/README_Cpp_Minimal.txt" ]]; then
   cp -f "${ROOT}/installer/README_Cpp_Minimal.txt" "${DST}/README_Cpp_Minimal.txt"
 else
