@@ -579,6 +579,16 @@ bool pa_duplex_output_targets_virt_sink_route() {
     if (pa_output_name_is_virt_sink_discord_route(inf->name)) {
         return true;
     }
+#if defined(__linux__)
+    // PULSE_SINK is honored for any stream going through the PulseAudio PortAudio host API, but the device
+    // name is often "Built-in Audio …" not "pulse". Without this, Monitor off zeros samples and kills *_mic.
+    if (lv_env_pulse_sink_targets_virt_route()) {
+        const PaHostApiIndex pulse = lv_find_pulse_host_api();
+        if (pulse >= 0 && inf->hostApi == pulse) {
+            return true;
+        }
+    }
+#endif
 #if defined(_WIN32)
     if (pa_output_name_is_windows_virtual_audio_route(inf->name)) {
         return true;
@@ -590,20 +600,7 @@ bool pa_duplex_output_targets_virt_sink_route() {
         return true;
     }
 #endif
-    if (pa_output_device_is_pulse_pcm_virt_route(inf->name)) {
-        return true;
-    }
-#if defined(__linux__)
-    // pick_output_device() often selects PulseAudio host API default (sink display name), not ALSA "pulse".
-    // Libpulse still honors PULSE_SINK → null sink; without this flag Monitor off zeros output and breaks *_mic.
-    if (lv_env_pulse_sink_targets_virt_route()) {
-        const PaHostApiIndex pulse_api = lv_find_pulse_host_api();
-        if (pulse_api >= 0 && inf->hostApi == pulse_api) {
-            return true;
-        }
-    }
-#endif
-    return false;
+    return pa_output_device_is_pulse_pcm_virt_route(inf->name);
 }
 
 void pa_log_stream_devices(PaStream* stream) {

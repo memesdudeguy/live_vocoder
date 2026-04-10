@@ -404,12 +404,13 @@ bool ingest_dropped_carrier(const std::filesystem::path& exe_dir, const std::fil
     return true;
 }
 
-void set_title(SDL_Window* w, const std::string& carrier_label, bool streaming, bool clean_mic, bool monitor_on) {
+void set_title(SDL_Window* w, const std::string& carrier_label, bool streaming, bool clean_mic, bool monitor_on,
+               bool virt_sink_hot) {
     std::string t = "Live Vocoder — ";
     if (streaming) {
         t += clean_mic ? "mic (dry)" : "vocoding";
         if (!monitor_on) {
-            t += " · muted";
+            t += virt_sink_hot ? " · to virtual sink (speakers off)" : " · muted";
         }
     } else {
         t += "stopped";
@@ -1315,7 +1316,8 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
 
     auto refresh_title = [&]() {
         set_title(window, carrier_label, streaming, app.clean_mic.load(std::memory_order_relaxed),
-                  app.monitor_on.load(std::memory_order_relaxed));
+                  app.monitor_on.load(std::memory_order_relaxed),
+                  streaming && app.pulse_virt_sink_output.load(std::memory_order_relaxed));
     };
     refresh_title();
 
