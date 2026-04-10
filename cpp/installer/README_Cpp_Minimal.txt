@@ -52,6 +52,8 @@ If conversion fails:
 - Set environment variable LIVE_VOCODER_FFMPEG to the full path of ffmpeg.exe.
 - **MP3 with embedded cover art** used to trip ffmpeg (“no suitable output format”); the app now passes **-vn**
   so only audio goes to the .f32 file.
+- **OneDrive / Documents:** when possible the app **copies the source into %TEMP%**, runs ffmpeg on short ASCII paths,
+  then moves the .f32 into LiveVocoderCarriers (helps cloud folders and long Unicode paths).
 
 Pre-converted .f32 carriers do not need ffmpeg.
 
