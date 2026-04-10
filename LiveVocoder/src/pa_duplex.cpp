@@ -609,7 +609,18 @@ bool pa_duplex_output_targets_virt_sink_route() {
         return true;
     }
 #endif
-    return pa_output_device_is_pulse_pcm_virt_route(inf->name);
+    if (pa_output_device_is_pulse_pcm_virt_route(inf->name)) {
+        return true;
+    }
+#if defined(__linux__)
+    if (lv_env_pulse_sink_targets_virt_route()) {
+        const PaHostApiIndex pulse_api = lv_find_pulse_host_api();
+        if (pulse_api >= 0 && inf->hostApi == pulse_api) {
+            return true;
+        }
+    }
+#endif
+    return false;
 }
 
 void pa_log_stream_devices(PaStream* stream) {

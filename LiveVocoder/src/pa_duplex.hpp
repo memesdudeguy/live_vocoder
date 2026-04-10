@@ -29,8 +29,9 @@ void pa_log_stream_devices(PaStream* stream);
 void pa_duplex_note_stream_closed();
 
 /**
- * True if the output device used for the last successful ``pa_open_livevocoder_duplex`` looks like a PipeWire/Pulse
- * null sink (e.g. ``live_vocoder``) — not normal speakers. Used so Monitor off still feeds that sink.
+ * True if duplex output honors PULSE_SINK / null-sink routing for Discord-style capture: ALSA ``pulse``/``pipewire``,
+ * device name containing ``live_vocoder``, or (Linux) PortAudio's PulseAudio host API default while PULSE_SINK is set.
+ * Drives SDL ``pulse_virt_sink_output`` so Monitor off still feeds the virt sink and Monitor on sets up loopback.
  */
 bool pa_duplex_output_targets_virt_sink_route();
 
