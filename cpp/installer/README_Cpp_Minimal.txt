@@ -59,7 +59,7 @@ Troubleshooting carrier / ffmpeg
 **Native Windows**
 - If the error mentions **Wine** but you are on real Windows, you are on an **old LiveVocoder.exe** — reinstall from this **5.0** setup so you get CreateProcess ffmpeg + fixed messages.
 - Confirm both files exist: ``dir "C:\Program Files\Live Vocoder\LiveVocoder.exe" "C:\Program Files\Live Vocoder\ffmpeg.exe"``
-- OneDrive: source audio must be **fully downloaded** (not cloud-only).
+- **OneDrive:** paths containing ``OneDrive`` are copied to ``%TEMP%`` before ffmpeg (hydrates many cloud-only files). If it still fails, use **Always keep on this device** or move the audio out of OneDrive.
 - Set ``LIVE_VOCODER_FFMPEG`` to a **full Windows path** to a known-good ffmpeg.exe (e.g. gyan.dev / BtbN builds) and restart the app.
 
 **Wine on Linux**
