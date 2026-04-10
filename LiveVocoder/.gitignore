@@ -1,7 +1,0 @@
-build/
-build-*/
-build-mingw-cross/
-dist-windows-cross/
-dist-windows-installer-minimal/
-dist-installer/
-dist-windows/

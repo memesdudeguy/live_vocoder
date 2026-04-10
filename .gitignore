@@ -50,12 +50,17 @@ cpp/dist-windows-cross/
 cpp/dist-installer/
 cpp/dist-windows-installer-minimal/
 
-# --- Standalone C++ tree (LiveVocoder/README.txt) ---
-LiveVocoder/build/
-LiveVocoder/build-mingw-cross/
-LiveVocoder/dist-windows-cross/
-LiveVocoder/dist-windows-installer-minimal/
-LiveVocoder/dist-installer/
+# Legacy path (build artifacts); canonical tree is src/
+LiveVocoder/
+
+# --- Standalone tree at src/ (development copy; see src/README.txt) ---
+src/cpp/build/
+src/cpp/build-mingw-cross/
+src/cpp/build-native-test/
+src/cpp/dist-windows/
+src/cpp/dist-windows-cross/
+src/cpp/dist-installer/
+src/cpp/dist-windows-installer-minimal/
 
 # --- Misc generated ---
 *.tmp

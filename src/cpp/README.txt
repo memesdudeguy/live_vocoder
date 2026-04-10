@@ -1,8 +1,8 @@
 C++ executable (SDL2 GUI) + optional Python app
 ==============================================
 
-**Optional:** edit the same C++ sources under ``src/cpp/src`` (minimal tree under repo ``src/``), then
-sync into ``cpp/src`` (e.g. ``rsync -a src/cpp/src/ cpp/src/``) before Windows bundles / CI.
+**This tree** is the standalone C++ layout checked in under repo ``src/``. To refresh the main CI tree,
+copy ``src/cpp/src/`` → repo ``cpp/src/`` (see repo root ``cpp/README.txt``).
 
 CMake on Linux / macOS — use this layout
 -----------------------------------------
