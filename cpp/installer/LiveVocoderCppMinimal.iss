@@ -30,7 +30,8 @@ SolidCompression=yes
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 DisableProgramGroupPage=yes
-PrivilegesRequiredOverridesAllowed=dialog
+; "dialog" can pop a GUI even when /VERYSILENT is passed (bad for Wine/CI); use /CURRENTUSER or /ALLUSERS to pick install mode.
+PrivilegesRequiredOverridesAllowed=commandline
 UsedUserAreasWarning=no
 WizardStyle=modern
 CloseApplications=yes
@@ -272,24 +273,26 @@ end;
 
 procedure CurPageChanged(CurPageID: Integer);
 begin
-  if CurPageID = wpFinished then
-  begin
-    if IsRunningUnderWine then
-      WizardForm.RunList.Visible := False;
-  end;
+  { WizardForm is not shown under /SILENT or /VERYSILENT — touching it can misbehave on Wine. }
+  if WizardSilent then
+    Exit;
+  if (CurPageID = wpFinished) and IsRunningUnderWine then
+    WizardForm.RunList.Visible := False;
 end;
 
 function ShouldSkipPage(PageID: Integer): Boolean;
 begin
   Result := False;
+  { Skip Finished under /SILENT or /VERYSILENT so setup exits without a blocking window (Wine often still showed it). }
+  if (PageID = wpFinished) and WizardSilent then
+    Result := True;
 end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;
 begin
   Result := True;
-  if CurPageID = wpFinished then
-  begin
-    if IsRunningUnderWine then
-      WineLaunchApp;
-  end;
+  if WizardSilent then
+    Exit;
+  if (CurPageID = wpFinished) and IsRunningUnderWine then
+    WineLaunchApp;
 end;

@@ -30,7 +30,8 @@ SolidCompression=yes
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 DisableProgramGroupPage=yes
-PrivilegesRequiredOverridesAllowed=dialog
+; Avoid privilege override dialog under /VERYSILENT; use /CURRENTUSER or /ALLUSERS on the command line.
+PrivilegesRequiredOverridesAllowed=commandline
 UsedUserAreasWarning=no
 WizardStyle=modern
 ; Replace in-use LiveVocoder.exe on upgrade (otherwise DeleteFile code 5 → abort, especially with /SUPPRESSMSGBOXES).
@@ -273,24 +274,24 @@ end;
 
 procedure CurPageChanged(CurPageID: Integer);
 begin
-  if CurPageID = wpFinished then
-  begin
-    if IsRunningUnderWine then
-      WizardForm.RunList.Visible := False;
-  end;
+  if WizardSilent then
+    Exit;
+  if (CurPageID = wpFinished) and IsRunningUnderWine then
+    WizardForm.RunList.Visible := False;
 end;
 
 function ShouldSkipPage(PageID: Integer): Boolean;
 begin
   Result := False;
+  if (PageID = wpFinished) and WizardSilent then
+    Result := True;
 end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;
 begin
   Result := True;
-  if CurPageID = wpFinished then
-  begin
-    if IsRunningUnderWine then
-      WineLaunchApp;
-  end;
+  if WizardSilent then
+    Exit;
+  if (CurPageID = wpFinished) and IsRunningUnderWine then
+    WineLaunchApp;
 end;

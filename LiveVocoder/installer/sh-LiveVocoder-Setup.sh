@@ -36,6 +36,7 @@ if command -v pactl >/dev/null 2>&1; then
     fi
   done || true
 fi
+# Headless example: .../sh-LiveVocoder-Setup.sh /VERYSILENT /NORESTART /SUPPRESSMSGBOXES /CURRENTUSER /NOCLOSEAPPLICATIONS
 # Inno cannot replace LiveVocoder.exe while it is still running (Windows DeleteFile error 5 → install aborts).
 if command -v wine >/dev/null 2>&1; then
   wine taskkill /IM LiveVocoder.exe /F 2>/dev/null || true

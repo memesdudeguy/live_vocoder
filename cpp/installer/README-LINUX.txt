@@ -5,10 +5,16 @@ The file LiveVocoder_Setup_*.exe (full portable tree) is produced ONLY on Window
 Inno Setup's ISCC compiler. It is written to ../dist-installer/ next to this folder.
 
 On Linux or macOS:
-  - cmake --build ... --target inno_installer  will NOT create any .exe here.
-  - Download the installer from GitHub Actions: workflow "Build C++ Windows EXE",
-    artifact name: LiveVocoder-setup
+  - If Wine finds Inno Setup 6 in your WINEPREFIX, `cmake --build build --target inno_installer`
+    runs ISCC via Wine (see CMake configure status line). Otherwise use ./build-installer.sh or
+    ./build-installer-minimal.sh, or download from GitHub Actions: workflow "Build C++ Windows EXE",
+    artifact LiveVocoder-setup / LiveVocoder-setup (minimal).
   - Or run build-installer.bat on a Windows PC with Inno Setup 6 installed.
+
+Unattended install under Wine (no Finish window; process exits on its own):
+  wine path/to/LiveVocoder-Setup.exe /VERYSILENT /NORESTART /SUPPRESSMSGBOXES /CURRENTUSER /NOCLOSEAPPLICATIONS
+  Same flags work with sh-LiveVocoder-Setup.sh (arguments are passed through to the .exe).
+  Use /ALLUSERS instead of /CURRENTUSER for a per-machine install when your prefix allows it.
 
 Minimal C++ installer (exe + DLLs only, no bundled Python):
   - From cpp/: LV_BUNDLE_PYTHON=0 ./build-cross-windows.sh   then   ./build-installer-minimal.sh
