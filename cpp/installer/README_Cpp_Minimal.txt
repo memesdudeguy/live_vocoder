@@ -49,7 +49,8 @@ Open it once in File Explorer, or use "Always keep on this device", then try aga
 If conversion fails:
 - Ensure ffmpeg.exe sits in the same folder as LiveVocoder.exe, or
 - Add a Windows ffmpeg install to your PATH, or
-- Set environment variable LIVE_VOCODER_FFMPEG to the full path of ffmpeg.exe.
+- Set environment variable LIVE_VOCODER_FFMPEG to the full path of ffmpeg.exe (**native Windows only**; the app
+  ignores this variable under Wine — use Windows ``ffmpeg.exe`` next to ``LiveVocoder.exe``).
 - **MP3 with embedded cover art** used to trip ffmpeg (“no suitable output format”); the app now passes **-vn**
   so only audio goes to the .f32 file.
 - **OneDrive / Documents:** when possible the app **copies the source into %TEMP%**, runs ffmpeg on short ASCII paths,
@@ -64,7 +65,8 @@ Troubleshooting carrier / ffmpeg
 - If the error mentions **Wine** but you are on real Windows, you are on an **old LiveVocoder.exe** — reinstall from this **5.0** setup so you get CreateProcess ffmpeg + fixed messages.
 - Confirm both files exist: ``dir "C:\Program Files\Live Vocoder\LiveVocoder.exe" "C:\Program Files\Live Vocoder\ffmpeg.exe"``
 - OneDrive: source audio must be **fully downloaded** (not cloud-only).
-- Set ``LIVE_VOCODER_FFMPEG`` to a **full Windows path** to a known-good ffmpeg.exe (e.g. gyan.dev / BtbN builds) and restart the app.
+- Set ``LIVE_VOCODER_FFMPEG`` (native Windows only; ignored under Wine) to a **full Windows path** to a known-good
+  ffmpeg.exe (e.g. gyan.dev / BtbN builds) and restart the app. Unicode paths are read from the user environment.
 
 **Wine on Linux**
 - Use **Windows ffmpeg.exe** next to the app (the installer provides it). Do not point Wine at ``/usr/bin/ffmpeg``.
@@ -138,7 +140,7 @@ inside the Wine process.
 Other environment variables
 ---------------------------
   LIVE_VOCODER_START_CARRIER   path to a carrier file to load at startup
-  LIVE_VOCODER_FFMPEG          full path to ffmpeg.exe (Windows)
+  LIVE_VOCODER_FFMPEG          full path to ffmpeg.exe (native Windows only; ignored under Wine)
   LIVE_VOCODER_SDL_SKIP_STARTUP_MODALS  set to 1 to skip non-error SDL message boxes at startup
 
 

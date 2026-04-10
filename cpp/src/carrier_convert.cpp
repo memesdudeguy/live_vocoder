@@ -174,7 +174,7 @@ static std::string lv_sibling_ffmpeg_exe() {
     return {};
 }
 
-static void lv_push_unique_ffmpeg_candidate(std::vector<std::string>& out, const std::string& s) {
+static void lv_push_unique_ffmpeg_w(std::vector<std::wstring>& out, std::wstring s) {
     if (s.empty()) {
         return;
     }
@@ -183,7 +183,7 @@ static void lv_push_unique_ffmpeg_candidate(std::vector<std::string>& out, const
             return;
         }
     }
-    out.push_back(s);
+    out.push_back(std::move(s));
 }
 
 /**
@@ -426,7 +426,11 @@ static std::wstring carrier_win32_path_for_ffmpeg_arg_w(const std::filesystem::p
 static void carrier_win32_err_ffmpeg_not_run(std::string& err_out) {
     err_out =
         "could not run ffmpeg.exe. On Windows put ffmpeg.exe next to LiveVocoder.exe (installer does this), "
-        "or add ffmpeg to PATH, or set LIVE_VOCODER_FFMPEG to the full path. ";
+        "or add ffmpeg to PATH";
+    if (!carrier_win32_wine_dll_loaded()) {
+        err_out += ", or set LIVE_VOCODER_FFMPEG to the full path to ffmpeg.exe (native Windows only; ignored under Wine)";
+    }
+    err_out += ". ";
     if (carrier_win32_wine_dll_loaded()) {
         err_out += "Under Wine on Linux you cannot use the host /usr/bin/ffmpeg — use Windows ffmpeg.exe. ";
     }
@@ -438,9 +442,9 @@ static void carrier_win32_err_ffmpeg_failed_no_stderr(std::string& err_out) {
     if (carrier_win32_wine_dll_loaded()) {
         err_out +=
             " — unsupported format, unreadable path under Wine, or missing codec in ffmpeg.exe. "
-            "Fix: put ffmpeg.exe next to LiveVocoder.exe (or set LIVE_VOCODER_FFMPEG), use Library… "
-            "inside the app, or pre-convert on the host: "
-            "ffmpeg -y -i track.mp3 -vn -f f32le -c:a pcm_f32le -ac 1 -ar 48000 carrier.f32 then drop the .f32.";
+            "Fix: put ffmpeg.exe next to LiveVocoder.exe, use Library… inside the app, or pre-convert on the host: "
+            "ffmpeg -y -i track.mp3 -vn -f f32le -c:a pcm_f32le -ac 1 -ar 48000 carrier.f32 then drop the .f32. "
+            "(LIVE_VOCODER_FFMPEG is ignored under Wine.)";
         return;
     }
     err_out +=
@@ -597,17 +601,41 @@ bool carrier_ffmpeg_to_f32(int sample_rate, const std::filesystem::path& src,
     const std::string dst_s = ffmpeg_path_for_win32_ffmpeg_cmd(dst_run);
     const std::string ar_s = std::to_string(sample_rate);
 
-    // Windows / Wine: host Linux ffmpeg is not runnable — need ffmpeg.exe on PATH, next to the exe,
-    // or LIVE_VOCODER_FFMPEG=full\path\to\ffmpeg.exe
-    std::vector<std::string> candidates;
-    if (const char* ev = std::getenv("LIVE_VOCODER_FFMPEG")) {
-        if (ev[0] != '\0') {
-            lv_push_unique_ffmpeg_candidate(candidates, std::string(ev));
+    // Windows / Wine: need Windows ffmpeg.exe. LIVE_VOCODER_FFMPEG is **native Windows only** (wide env + UTF-8
+    // getenv fallback); ignored under Wine so users do not point at the host /usr/bin/ffmpeg by mistake.
+    std::vector<std::wstring> ff_candidates;
+    const bool run_on_wine = carrier_win32_running_under_wine();
+    if (!run_on_wine) {
+        wchar_t evb[4096];
+        const DWORD ne =
+            GetEnvironmentVariableW(L"LIVE_VOCODER_FFMPEG", evb, static_cast<DWORD>(sizeof(evb) / sizeof(evb[0])));
+        if (ne > 0 && ne < sizeof(evb) / sizeof(evb[0])) {
+            std::error_code ec_env;
+            const std::filesystem::path ep(evb);
+            if (std::filesystem::is_regular_file(ep, ec_env)) {
+                lv_push_unique_ffmpeg_w(ff_candidates, ep.lexically_normal().wstring());
+            }
+        }
+        if (ff_candidates.empty()) {
+            if (const char* ev = std::getenv("LIVE_VOCODER_FFMPEG")) {
+                if (ev[0] != '\0') {
+                    std::wstring rw = carrier_win32_resolve_ffmpeg_exe_w(std::string(ev));
+                    if (!rw.empty()) {
+                        lv_push_unique_ffmpeg_w(ff_candidates, std::move(rw));
+                    }
+                }
+            }
         }
     }
-    lv_push_unique_ffmpeg_candidate(candidates, lv_sibling_ffmpeg_exe());
-    lv_push_unique_ffmpeg_candidate(candidates, std::string("ffmpeg.exe"));
-    lv_push_unique_ffmpeg_candidate(candidates, std::string("ffmpeg"));
+    if (const std::wstring sib = carrier_win32_resolve_ffmpeg_exe_w(lv_sibling_ffmpeg_exe()); !sib.empty()) {
+        lv_push_unique_ffmpeg_w(ff_candidates, sib);
+    }
+    if (const std::wstring p1 = carrier_win32_resolve_ffmpeg_exe_w("ffmpeg.exe"); !p1.empty()) {
+        lv_push_unique_ffmpeg_w(ff_candidates, p1);
+    }
+    if (const std::wstring p2 = carrier_win32_resolve_ffmpeg_exe_w("ffmpeg"); !p2.empty()) {
+        lv_push_unique_ffmpeg_w(ff_candidates, p2);
+    }
 
     std::error_code ec_tmp;
     wchar_t tmpw[MAX_PATH + 2];
@@ -622,29 +650,26 @@ bool carrier_ffmpeg_to_f32(int sample_rate, const std::filesystem::path& src,
     const std::filesystem::path err_log_cmd = carrier_win32_short_path_for_cmd_redir(err_log);
     const std::string err_redir_target = ffmpeg_path_arg_windows(err_log_cmd);
 
-    const bool run_on_wine = carrier_win32_running_under_wine();
     int exit_code = -999;
-    for (const std::string& ffmpeg_exe : candidates) {
-        if (ffmpeg_exe.empty()) {
+    for (const std::wstring& ffw : ff_candidates) {
+        if (ffw.empty()) {
             continue;
         }
         std::filesystem::remove(err_log, ec_tmp);
         int ex = -1;
-        const std::wstring ff = carrier_win32_resolve_ffmpeg_exe_w(ffmpeg_exe);
-        if (!ff.empty()) {
-            const std::wstring src_w = carrier_win32_path_for_ffmpeg_arg_w(src_run);
-            const std::wstring dst_w = carrier_win32_path_for_ffmpeg_arg_w(dst_run);
-            const int cr =
-                carrier_win32_run_ffmpeg_createprocess(ff, src_w, dst_w, sample_rate, err_log.wstring());
-            if (cr != -999 && cr != -998) {
-                ex = cr;
-            }
+        const std::wstring src_w = carrier_win32_path_for_ffmpeg_arg_w(src_run);
+        const std::wstring dst_w = carrier_win32_path_for_ffmpeg_arg_w(dst_run);
+        const int cr =
+            carrier_win32_run_ffmpeg_createprocess(ffw, src_w, dst_w, sample_rate, err_log.wstring());
+        if (cr != -999 && cr != -998) {
+            ex = cr;
         }
         // Wine used to rely on ``system()`` + ``2>``; stderr often stayed empty (exit 1, useless UI). Native always used
         // CreateProcess above. If spawn failed or only a bare ``ffmpeg`` name resolved via PATH, fall back to cmd.
         if (ex == -1 && run_on_wine) {
+            const std::string ff_u8 = std::filesystem::path(ffw).u8string();
             const std::string cmd =
-                quote_cmd_exe_arg(ffmpeg_exe) +
+                quote_cmd_exe_arg(ff_u8) +
                 " -y -nostdin -hide_banner -loglevel info -i " + quote_cmd_exe_arg(src_s) +
                 " -vn -sn -dn -map_metadata -1 -f f32le -c:a pcm_f32le -ac 1 -ar " + ar_s + " " +
                 quote_cmd_exe_arg(dst_s) + " 2>" + quote_cmd_exe_arg(err_redir_target);
