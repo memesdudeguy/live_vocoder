@@ -64,8 +64,10 @@ Troubleshooting carrier / ffmpeg
 
 **Wine on Linux**
 - Use **Windows ffmpeg.exe** next to the app (the installer provides it). Do not point Wine at ``/usr/bin/ffmpeg``.
+- **5.0** runs that ffmpeg with the same **CreateProcess** path as real Windows (working directory next to ``ffmpeg.exe``, stderr captured). If conversion still fails, the dialog should show ffmpeg’s own error text — not an empty log.
 - Prefer ``live-vocoder-wine-launch.sh`` or your distro’s launcher so ``PULSE_SINK`` / null sinks are set before ``wine``.
 - Carrier paths under ``Z:\`` are normal; the app keeps the Wine ffmpeg command path.
+- **QEMU test VM:** the host shares the folder containing ``LiveVocoder-Setup.exe`` as ``\\10.0.2.4\qemu``. Use ``Run-from-QEMU-share.bat`` or copy the installer to the guest **Downloads** folder, install, then run **LiveVocoder.exe** from the Start menu or ``Program Files``.
 
 
 Main controls

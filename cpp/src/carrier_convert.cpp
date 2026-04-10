@@ -534,8 +534,9 @@ bool carrier_ffmpeg_to_f32(int sample_rate, const std::filesystem::path& src,
     } else {
         err_log = std::filesystem::temp_directory_path(ec_tmp) / "lvoc_ff.txt";
     }
-    err_log = carrier_win32_short_path_for_cmd_redir(err_log);
-    const std::string err_redir_target = ffmpeg_path_arg_windows(err_log);
+    // CreateProcess opens ``err_log`` by wide path. Short paths are only for cmd.exe ``2>`` fallback (Wine / edge cases).
+    const std::filesystem::path err_log_cmd = carrier_win32_short_path_for_cmd_redir(err_log);
+    const std::string err_redir_target = ffmpeg_path_arg_windows(err_log_cmd);
 
     const bool run_on_wine = carrier_win32_running_under_wine();
     int exit_code = -999;
@@ -545,8 +546,19 @@ bool carrier_ffmpeg_to_f32(int sample_rate, const std::filesystem::path& src,
         }
         std::filesystem::remove(err_log, ec_tmp);
         int ex = -1;
-        if (run_on_wine) {
-            // Wine: keep cmd.exe + ``2>`` (known-good with Z: paths and Wine's system()).
+        const std::wstring ff = carrier_win32_resolve_ffmpeg_exe_w(ffmpeg_exe);
+        if (!ff.empty()) {
+            const std::wstring src_w = std::filesystem::u8path(src_s).wstring();
+            const std::wstring dst_w = std::filesystem::u8path(dst_s).wstring();
+            const int cr =
+                carrier_win32_run_ffmpeg_createprocess(ff, src_w, dst_w, sample_rate, err_log.wstring());
+            if (cr != -999 && cr != -998) {
+                ex = cr;
+            }
+        }
+        // Wine used to rely on ``system()`` + ``2>``; stderr often stayed empty (exit 1, useless UI). Native always used
+        // CreateProcess above. If spawn failed or only a bare ``ffmpeg`` name resolved via PATH, fall back to cmd.
+        if (ex == -1 && run_on_wine) {
             const std::string cmd = quote_cmd_exe_arg(ffmpeg_exe) + " -y -nostdin -hide_banner -loglevel info -i " +
                                     quote_cmd_exe_arg(src_s) + " -f f32le -ac 1 -ar " + ar_s + " " +
                                     quote_cmd_exe_arg(dst_s) + " 2>" + quote_cmd_exe_arg(err_redir_target);
@@ -555,20 +567,8 @@ bool carrier_ffmpeg_to_f32(int sample_rate, const std::filesystem::path& src,
                 continue;
             }
             ex = system_normalized_exit(r);
-        } else {
-            // Native Windows: CreateProcess + inherited stderr avoids cmd UTF-8/redirection issues (empty log → wrong hints).
-            const std::wstring ff = carrier_win32_resolve_ffmpeg_exe_w(ffmpeg_exe);
-            if (ff.empty()) {
-                continue;
-            }
-            const std::wstring src_w = std::filesystem::u8path(src_s).wstring();
-            const std::wstring dst_w = std::filesystem::u8path(dst_s).wstring();
-            const int cr =
-                carrier_win32_run_ffmpeg_createprocess(ff, src_w, dst_w, sample_rate, err_log.wstring());
-            if (cr == -999 || cr == -998) {
-                continue;
-            }
-            ex = cr;
+        } else if (ex == -1) {
+            continue;
         }
         if (ex == 0) {
             exit_code = 0;
