@@ -23,6 +23,7 @@ Download artifact **LiveVocoder-setup** from GitHub Actions, or read ``cpp/insta
 The built binary is always named ``LiveVocoder.exe`` (under ``cpp/build/`` or your CMake output dir). On Windows / MinGW it is a PE; on Linux/macOS it is still a native executable with an ``.exe`` suffix for consistency. Use the MinGW cross build under ``dist-windows-cross/`` when you need a Windows PE for real Windows or Wine.
 
 - **Default** (no arguments): **SDL2 + PortAudio** vocoder GUI (C++ only — no GTK/Tk/web from this binary).
+- **Automation / headless SDL:** ``LIVE_VOCODER_SDL_SKIP_STARTUP_MODALS=1`` skips the welcome and font-warning message boxes (still shows error dialogs). Pair with ``SDL_VIDEODRIVER=dummy`` for CI smoke tests. Linux CMake build copies ``fonts/DejaVuSans.ttf`` next to ``LiveVocoder.exe`` when found under ``/usr/share/fonts``.
 - **``<audio|.f32>``** as the only argument, or **``--sdl-gui``** [optional path]: same SDL GUI (non-.f32 needs **ffmpeg** on PATH).
 - **``--minimal-cpp <audio|.f32> [sr]``**: headless C++ band vocoder (ffmpeg converts to mono f32le at ``sr``, default 48000).
 

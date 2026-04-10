@@ -34,6 +34,25 @@ if(LIVE_VOCODER_CPP_SDL_GUI)
                 "$<TARGET_FILE_DIR:live_vocoder_cpp>/app-icon.png"
             COMMENT "Copy app-icon.png next to executable for SDL window icon")
     endif()
+    # Linux: ship DejaVu next to the binary so SDL TTF works without relying on distro paths alone.
+    if(UNIX AND NOT APPLE AND NOT WIN32)
+        set(_LV_DEJAVU_FONT "")
+        if(EXISTS "/usr/share/fonts/TTF/DejaVuSans.ttf")
+            set(_LV_DEJAVU_FONT "/usr/share/fonts/TTF/DejaVuSans.ttf")
+        elseif(EXISTS "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf")
+            set(_LV_DEJAVU_FONT "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf")
+        endif()
+        if(_LV_DEJAVU_FONT)
+            add_custom_command(TARGET live_vocoder_cpp POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:live_vocoder_cpp>/fonts"
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    "${_LV_DEJAVU_FONT}"
+                    "$<TARGET_FILE_DIR:live_vocoder_cpp>/fonts/DejaVuSans.ttf"
+                COMMENT "Copy DejaVuSans.ttf for SDL GUI (fonts/ next to executable)")
+        else()
+            message(STATUS "SDL2: DejaVuSans.ttf not found under /usr/share/fonts — install fonts-dejavu or add fonts/ manually")
+        endif()
+    endif()
     if(WIN32)
         target_sources(live_vocoder_cpp PRIVATE src/sdl_win32_entry.cpp)
     else()

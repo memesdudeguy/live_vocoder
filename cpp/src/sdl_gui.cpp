@@ -47,6 +47,12 @@ namespace {
 constexpr int kSr = 48000;
 constexpr int kHop = 512;
 
+/** Skip welcome / font SDL message boxes (automation, dummy video, CI). Errors still use modals. */
+bool sdl_skip_startup_modals() {
+    const char* e = std::getenv("LIVE_VOCODER_SDL_SKIP_STARTUP_MODALS");
+    return e != nullptr && e[0] != '\0' && std::strcmp(e, "0") != 0;
+}
+
 // GTK vm-root / vm-card palette (live_vocoder_gtk._vm_css); header logo = assets/app-icon.png
 struct Rgba {
     Uint8 r, g, b, a;
@@ -1200,11 +1206,15 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
                     carrier_path = dest.string();
                     carrier_label = dest.filename().string();
                 } else {
-                    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_WARNING, "Live Vocoder",
-                                             ("Could not convert startup carrier with ffmpeg (install ffmpeg, PATH):\n" +
-                                              conv_err)
-                                                 .c_str(),
-                                             window);
+                    if (sdl_skip_startup_modals()) {
+                        std::fprintf(stderr, "Live Vocoder: ffmpeg carrier conversion failed: %s\n", conv_err.c_str());
+                    } else {
+                        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_WARNING, "Live Vocoder",
+                                                 ("Could not convert startup carrier with ffmpeg (install ffmpeg, PATH):\n" +
+                                                  conv_err)
+                                                     .c_str(),
+                                                 window);
+                    }
                     carrier_path.clear();
                     carrier_label.clear();
                 }
@@ -1237,14 +1247,20 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
                         "Or place carrier.f32 there / next to the app. Needs ffmpeg on PATH for non-.f32.\n"
                         "Clean mic needs no carrier.\n\n") +
             kMonitorHelp;
-        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, "Live Vocoder", welcome.c_str(), window);
+        if (!sdl_skip_startup_modals()) {
+            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, "Live Vocoder", welcome.c_str(), window);
+        }
     } else {
-        SDL_ShowSimpleMessageBox(
-            SDL_MESSAGEBOX_WARNING, "Live Vocoder",
-            "No UI font found. Install fonts/DejaVuSans.ttf next to the executable (see README), "
-            "or use Segoe UI on Windows.\n\n"
-            "Controls still work: header Start / Stop / Quit; drop audio or .f32 (saved under LiveVocoderCarriers).",
-            window);
+        if (!sdl_skip_startup_modals()) {
+            SDL_ShowSimpleMessageBox(
+                SDL_MESSAGEBOX_WARNING, "Live Vocoder",
+                "No UI font found. Install fonts/DejaVuSans.ttf next to the executable (see README), "
+                "or use Segoe UI on Windows.\n\n"
+                "Controls still work: header Start / Stop / Quit; drop audio or .f32 (saved under LiveVocoderCarriers).",
+                window);
+        } else {
+            std::fprintf(stderr, "Live Vocoder: no UI font; place fonts/DejaVuSans.ttf next to the executable.\n");
+        }
     }
 
     constexpr float kClarityMaxDb = 12.f;
