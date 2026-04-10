@@ -3,14 +3,12 @@ Live Vocoder — C++ SDL build (minimal installer)
 
 Made by memesdudeguy.
 
-Release 5.0 — ``build-installer-minimal.sh`` / ``.bat`` compile **two** minimal installers (same payload,
-different names and wizard title):
+Release 6.0 — ``build-installer-minimal.sh`` / ``.bat`` compile **one** minimal installer:
 
-- ``LiveVocoder-Setup-Windows.exe`` — use on **native Windows** (QEMU VM, physical PC).
-- ``LiveVocoder-Setup-Wine.exe`` — same app; filename signals **run with Wine on Linux** (includes ``README_Wine.txt``).
+- ``LiveVocoder-Setup.exe`` — use on **native Windows** or with **Wine** on Linux (Wine-only extras apply at install-time when the installer detects Wine).
 
-On GitHub Actions, workflow “Build C++ Windows EXE” uploads both as artifact ``LiveVocoder-Cpp-setup-v5.0``.
-Pushing a tag matching ``v*`` attaches them plus ``LiveVocoder_Setup_5.0.exe`` (full installer) to the Release.
+On GitHub Actions, workflow “Build C++ Windows EXE” uploads it as artifact ``LiveVocoder-Cpp-setup-v6.0``.
+Pushing a tag matching ``v*`` attaches it plus ``LiveVocoder_Setup_6.0.exe`` (full installer) to the Release.
 
 What you get
 ------------
@@ -30,7 +28,7 @@ Smoke test (.f32 loads without starting audio)
 
 Quick start (Windows)
 ---------------------
-1. Run ``LiveVocoder-Setup-Windows.exe`` and finish the wizard (or unzip/copy the whole folder).
+1. Run ``LiveVocoder-Setup.exe`` and finish the wizard (or unzip/copy the whole folder).
 2. Start Live Vocoder from the Start menu or run LiveVocoder.exe in:
    C:\Program Files\Live Vocoder\
 3. Pick a carrier (see below), choose Vocode or Clean mic, then press Start.
@@ -73,7 +71,7 @@ Pre-converted .f32 carriers do not need ffmpeg.
 Troubleshooting carrier / ffmpeg
 ---------------------------------
 **Native Windows**
-- If the error mentions **Wine** but you are on real Windows, you are on an **old LiveVocoder.exe** — reinstall from this **5.0** setup so you get CreateProcess ffmpeg + fixed messages.
+- If the error mentions **Wine** but you are on real Windows, you are on an **old LiveVocoder.exe** — reinstall from this **6.0** setup so you get CreateProcess ffmpeg + fixed messages.
 - Confirm both files exist: ``dir "C:\Program Files\Live Vocoder\LiveVocoder.exe" "C:\Program Files\Live Vocoder\ffmpeg.exe"``
 - OneDrive: source audio must be **fully downloaded** (not cloud-only).
 - Set ``LIVE_VOCODER_FFMPEG`` (native Windows only; ignored under Wine) to a **full Windows path** to a known-good
@@ -81,11 +79,11 @@ Troubleshooting carrier / ffmpeg
 
 **Wine on Linux**
 - Use **Windows ffmpeg.exe** next to the app (the installer provides it). Do not point Wine at ``/usr/bin/ffmpeg``.
-- **5.0** runs that ffmpeg with the same **CreateProcess** path as real Windows (working directory next to ``ffmpeg.exe``, stderr captured). If conversion still fails, the dialog should show ffmpeg’s own error text — not an empty log.
+- **6.0** runs that ffmpeg with the same **CreateProcess** path as real Windows (working directory next to ``ffmpeg.exe``, stderr captured). If conversion still fails, the dialog should show ffmpeg’s own error text — not an empty log.
 - Prefer ``live-vocoder-wine-launch.sh`` or your distro’s launcher so ``PULSE_SINK`` / null sinks are set before ``wine``.
 - Carrier paths under ``Z:\`` are normal; the app keeps the Wine ffmpeg command path.
-- **QEMU test VM:** the host shares ``dist-installer`` as ``\\10.0.2.4\qemu``. Run ``LiveVocoder-Setup-Windows.exe`` (see ``Run-from-QEMU-share.bat``), install, then run **LiveVocoder.exe** from the Start menu or ``Program Files``.
-- **Linux host:** use ``LiveVocoder-Setup-Wine.exe`` with Wine, or ``sh-LiveVocoder-Setup.sh`` / the generated ``.desktop`` next to the installers.
+- **QEMU test VM:** the host shares ``dist-installer`` as ``\\10.0.2.4\qemu``. Run ``LiveVocoder-Setup.exe`` (see ``Run-from-QEMU-share.bat``), install, then run **LiveVocoder.exe** from the Start menu or ``Program Files``.
+- **Linux host:** ``wine LiveVocoder-Setup.exe``, or ``sh-LiveVocoder-Setup.sh`` / the generated ``.desktop`` next to the installer.
 
 
 Main controls

@@ -31,7 +31,7 @@ if command -v pactl >/dev/null 2>&1; then
     fi
   fi
 fi
-# Pulse dotted keys cannot be bash export names — pass via env(1) only (never export PULSE_PROP_* with dots).
+# Pulse dotted keys cannot be bash export names - pass via env(1) only (never export PULSE_PROP_* with dots).
 _LV_APP="${LIVE_VOCODER_PULSE_APP_NAME:-Live Vocoder}"
 _LV_MEDIA="${LIVE_VOCODER_PULSE_MEDIA_NAME:-Live Vocoder}"
 _LV_ICON="${LIVE_VOCODER_PULSE_ICON_NAME:-audio-input-microphone}"
@@ -56,7 +56,7 @@ _WINE_PID=$!
         *"application.name ="*)
           if [ -n "${_sid:-}" ]; then
             _nl="${_line,,}"
-            if [[ "$_nl" == *"livevocoder"* || "$_nl" == *"live vocoder"* ]]; then
+            if [[ "$_nl" == *"livevocoder"* || "$_nl" == *"live vocoder"* || "$_nl" == *"portaudio"* || "$_nl" == *"[audio stream"* ]]; then
               _SI="$_sid"
               break
             fi

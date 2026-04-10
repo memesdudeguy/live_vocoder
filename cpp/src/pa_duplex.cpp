@@ -51,8 +51,8 @@ static bool lv_ci_hay_contains(const char* hay, const char* needle) {
 }
 
 #if defined(_WIN32)
-/** Prefer WASAPI > DirectSound > MME so Wine→Pulse routing is stable. */
-static int lv_wine_host_api_score(PaHostApiIndex api_ix) {
+/** Prefer WASAPI > DirectSound > MME (Wine Pulse + native VB-Cable / WASAPI stability). */
+static int lv_win32_portaudio_host_api_score(PaHostApiIndex api_ix) {
     if (api_ix < 0) {
         return 0;
     }
@@ -101,13 +101,44 @@ static PaDeviceIndex lv_wine_pick_pulseaudio_duplex_device(bool want_output) {
         if (!lv_ci_hay_contains(inf->name, "pulseaudio")) {
             continue;
         }
-        const int sc = lv_wine_host_api_score(inf->hostApi);
+        const int sc = lv_win32_portaudio_host_api_score(inf->hostApi);
         if (sc > best_score) {
             best_score = sc;
             best = i;
         }
     }
     return best;
+}
+
+/** Native Windows: VB-Audio Virtual Cable playback endpoint (CABLE Input). Prefer WASAPI when duplicated. */
+static PaDeviceIndex lv_native_windows_pick_vb_cable_output_device(PaDeviceIndex n_dev) {
+    PaDeviceIndex best_named = paNoDevice;
+    int best_named_score = -1;
+    PaDeviceIndex any_vb = paNoDevice;
+    int any_vb_score = -1;
+    for (PaDeviceIndex i = 0; i < n_dev; ++i) {
+        const PaDeviceInfo* inf = Pa_GetDeviceInfo(i);
+        if (inf == nullptr || inf->name == nullptr || inf->maxOutputChannels < 2) {
+            continue;
+        }
+        const char* nm = inf->name;
+        if (!lv_ci_hay_contains(nm, "vb-audio")) {
+            continue;
+        }
+        const int sc = lv_win32_portaudio_host_api_score(inf->hostApi);
+        if (lv_ci_hay_contains(nm, "cable") && lv_ci_hay_contains(nm, "input")) {
+            if (sc > best_named_score) {
+                best_named_score = sc;
+                best_named = i;
+            }
+        } else {
+            if (sc > any_vb_score) {
+                any_vb_score = sc;
+                any_vb = i;
+            }
+        }
+    }
+    return (best_named >= 0) ? best_named : any_vb;
 }
 #endif
 
@@ -318,6 +349,36 @@ PaDeviceIndex pick_input_device() {
             return w;
         }
     }
+    if (!lv_windows_is_wine_host() && !env_truthy(std::getenv("LIVE_VOCODER_DISABLE_VB_CABLE")) && n_dev > 0) {
+        const PaDeviceIndex def_in = Pa_GetDefaultInputDevice();
+        if (def_in >= 0) {
+            const PaDeviceInfo* dinf = Pa_GetDeviceInfo(def_in);
+            if (dinf != nullptr && dinf->name != nullptr && lv_ci_hay_contains(dinf->name, "vb-audio")) {
+                // CABLE Output is the capture side; use a real mic for the vocoder input when possible.
+                if (lv_ci_hay_contains(dinf->name, "output")) {
+                    for (PaDeviceIndex i = 0; i < static_cast<PaDeviceIndex>(n_dev); ++i) {
+                        const PaDeviceInfo* inf = Pa_GetDeviceInfo(i);
+                        if (inf == nullptr || inf->name == nullptr || inf->maxInputChannels < 1) {
+                            continue;
+                        }
+                        if (lv_ci_hay_contains(inf->name, "vb-audio")) {
+                            continue;
+                        }
+                        static bool logged_win_in = false;
+                        if (!logged_win_in) {
+                            logged_win_in = true;
+                            std::fprintf(stderr,
+                                         "[LiveVocoder] Native Windows: default input was VB-Audio capture (\"%s\"). "
+                                         "Using \"%s\" (%d) as microphone — playback still goes to CABLE Input when "
+                                         "auto-routed.\n",
+                                         dinf->name, inf->name, static_cast<int>(i));
+                        }
+                        return i;
+                    }
+                }
+            }
+        }
+    }
 #endif
     return Pa_GetDefaultInputDevice();
 }
@@ -433,35 +494,17 @@ PaDeviceIndex pick_output_device() {
     if (!env_truthy(std::getenv("LIVE_VOCODER_DISABLE_VB_CABLE")) && !lv_windows_is_wine_host()) {
         const char* pa_out = std::getenv("LIVE_VOCODER_PA_OUTPUT");
         if ((pa_out == nullptr || pa_out[0] == '\0') && parse_device_index_env("LIVE_VOCODER_PA_OUTPUT_INDEX") < 0) {
-            PaDeviceIndex best_input_named = paNoDevice;
-            PaDeviceIndex any_vb = paNoDevice;
-            for (PaDeviceIndex i = 0; i < static_cast<PaDeviceIndex>(n_dev); ++i) {
-                const PaDeviceInfo* inf = Pa_GetDeviceInfo(i);
-                if (inf == nullptr || inf->name == nullptr || inf->maxOutputChannels < 2) {
-                    continue;
-                }
-                const char* nm = inf->name;
-                if (!lv_ci_hay_contains(nm, "vb-audio")) {
-                    continue;
-                }
-                if (any_vb < 0) {
-                    any_vb = i;
-                }
-                if (lv_ci_hay_contains(nm, "cable") && lv_ci_hay_contains(nm, "input")) {
-                    best_input_named = i;
-                    break;
-                }
-            }
             const PaDeviceIndex cab =
-                (best_input_named >= 0) ? best_input_named : any_vb;
+                lv_native_windows_pick_vb_cable_output_device(static_cast<PaDeviceIndex>(n_dev));
             if (cab >= 0) {
                 static bool logged_vb = false;
                 if (!logged_vb) {
                     logged_vb = true;
                     const PaDeviceInfo* inf = Pa_GetDeviceInfo(cab);
                     std::fprintf(stderr,
-                                 "[LiveVocoder] Native Windows: playback → virtual cable \"%s\" (device %d). "
-                                 "Override: LIVE_VOCODER_PA_OUTPUT=… or LIVE_VOCODER_DISABLE_VB_CABLE=1.\n",
+                                 "[LiveVocoder] Native Windows: playback → VB-Audio cable (CABLE Input) \"%s\" "
+                                 "(device %d). In Discord/OBS set mic to CABLE Output. Overrides: "
+                                 "LIVE_VOCODER_PA_OUTPUT / _INDEX; LIVE_VOCODER_DISABLE_VB_CABLE=1 for speakers.\n",
                                  inf != nullptr && inf->name != nullptr ? inf->name : "?",
                                  static_cast<int>(cab));
                 }
@@ -667,7 +710,9 @@ std::string pa_windows_virt_mic_route_hint() {
         return "Wine (Linux host): for PipeWire *_mic, set PULSE_SINK=live_vocoder when launching Wine/CrossOver, "
                "or move this app’s playback to that sink in pavucontrol. Else use native Linux LiveVocoder.exe.";
     }
-    return "Windows: pick devices with LIVE_VOCODER_PA_OUTPUT / LIVE_VOCODER_PA_INPUT or "
-           "LIVE_VOCODER_PA_LIST_DEVICES=1 (see README).";
+    return "Native Windows + VB-Audio Virtual Cable: playback auto-selects CABLE Input (vocoder → cable). "
+           "In Discord, OBS, etc. choose CABLE Output as the microphone. Install from vb-audio.com if needed. "
+           "Overrides: LIVE_VOCODER_PA_OUTPUT / LIVE_VOCODER_PA_INPUT / *_INDEX; "
+           "LIVE_VOCODER_DISABLE_VB_CABLE=1 uses normal default devices; LIVE_VOCODER_PA_LIST_DEVICES=1 lists names.";
 #endif
 }

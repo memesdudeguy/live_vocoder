@@ -12,7 +12,7 @@ On Linux or macOS:
   - Or run build-installer.bat on a Windows PC with Inno Setup 6 installed.
 
 Silent / unattended install under Wine (no GUI, exits when done):
-  wine .../LiveVocoder-Setup-Wine.exe /VERYSILENT /SUPPRESSMSGBOXES /CURRENTUSER /NORESTART /CLOSEAPPLICATIONS
+  wine .../LiveVocoder-Setup.exe /VERYSILENT /SUPPRESSMSGBOXES /CURRENTUSER /NORESTART /CLOSEAPPLICATIONS
   Or use sh-LiveVocoder-Setup.sh with LIVE_VOCODER_SETUP_SILENT=1 (adds those flags).
 
 Minimal C++ installer (exe + DLLs only, no bundled Python):
@@ -22,7 +22,7 @@ Minimal C++ installer (exe + DLLs only, no bundled Python):
     scripts look for ISCC.exe under both "Program Files (x86)/Inno Setup 6" and "Program Files/Inno Setup 6"
     (32-bit vs 64-bit Inno installers use different folders).
   - With CMake: if Wine + ISCC are found, `cmake --build build --target inno_installer` runs ISCC via Wine.
-  - Output: dist-installer/LiveVocoder-Setup-Windows.exe and LiveVocoder-Setup-Wine.exe
+  - Output: dist-installer/LiveVocoder-Setup.exe (same file for Windows and Wine)
   - Inno script: installer/LiveVocoderCppMinimal.iss
 
 Correct CMake layout (from repo):

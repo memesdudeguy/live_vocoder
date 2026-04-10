@@ -66,7 +66,6 @@ run_iscc() {
 
 if [[ -n "$iscc" ]]; then
   run_iscc
-  run_iscc /DWINEHOSTINSTALLER
 else
   _wp="${WINEPREFIX:-$HOME/.wine}"
   _wiscc=""
@@ -81,7 +80,6 @@ else
   if [[ -n "$_wiscc" ]] && command -v wine >/dev/null 2>&1; then
     iscc=""
     run_iscc
-    run_iscc /DWINEHOSTINSTALLER
   else
     echo "ISCC.exe not found. Install Inno Setup 6 (64-bit → \"Program Files\", 32-bit → \"Program Files (x86)\") under Wine, or use Windows/Git Bash. See installer/README-LINUX.txt" >&2
     exit 1
@@ -89,13 +87,11 @@ else
 fi
 
 echo "Installer output:"
-ls -1 "${ROOT}/dist-installer"/LiveVocoder-Setup-Windows.exe "${ROOT}/dist-installer"/LiveVocoder-Setup-Wine.exe 2>/dev/null || true
+ls -1 "${ROOT}/dist-installer/LiveVocoder-Setup.exe" 2>/dev/null || true
 
 _setup_exe=""
-if [[ -f "${ROOT}/dist-installer/LiveVocoder-Setup-Wine.exe" ]]; then
-  _setup_exe="${ROOT}/dist-installer/LiveVocoder-Setup-Wine.exe"
-elif [[ -f "${ROOT}/dist-installer/LiveVocoder-Setup-Windows.exe" ]]; then
-  _setup_exe="${ROOT}/dist-installer/LiveVocoder-Setup-Windows.exe"
+if [[ -f "${ROOT}/dist-installer/LiveVocoder-Setup.exe" ]]; then
+  _setup_exe="${ROOT}/dist-installer/LiveVocoder-Setup.exe"
 else
   _setup_exe="$(ls -1t "${ROOT}/dist-installer"/LiveVocoder_Cpp_Setup_*.exe 2>/dev/null | head -1)"
 fi
@@ -109,7 +105,7 @@ if [[ -n "$_setup_exe" ]]; then
     echo "Version=1.0"
     echo "Type=Application"
     echo "Name=Live Vocoder C++ Setup (Wine)"
-    echo "Comment=Minimal installer — use LiveVocoder-Setup-Wine.exe with Wine"
+    echo "Comment=Minimal installer — wine LiveVocoder-Setup.exe"
     echo "Exec=wine \"${_ex_abs}\""
     echo "Icon=${_ic_abs}"
     echo "Categories=AudioVideo;Audio;Mixer;"

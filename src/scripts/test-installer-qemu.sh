@@ -10,7 +10,7 @@
 #   ./scripts/test-installer-qemu-win10.sh
 #
 # Usage:
-#   ./scripts/test-installer-qemu.sh [path/to/LiveVocoder-Setup-Wine.exe]
+#   ./scripts/test-installer-qemu.sh [path/to/LiveVocoder-Setup.exe]
 # Env:
 #   LV_QEMU_PORT=9876   host HTTP port for the guest to fetch the installer
 #   LV_QEMU_RAM=6144    MB RAM
@@ -19,7 +19,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-INSTALLER="${1:-$ROOT/cpp/dist-installer/LiveVocoder-Setup-Wine.exe}"
+INSTALLER="${1:-$ROOT/cpp/dist-installer/LiveVocoder-Setup.exe}"
 INST_BN="$(basename "$INSTALLER")"
 PORT="${LV_QEMU_PORT:-9876}"
 RAM_MB="${LV_QEMU_RAM:-6144}"

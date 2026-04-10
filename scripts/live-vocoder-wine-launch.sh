@@ -56,7 +56,7 @@ _WINE_PID=$!
         *"application.name ="*)
           if [ -n "${_sid:-}" ]; then
             _nl="${_line,,}"
-            if [[ "$_nl" == *"livevocoder"* || "$_nl" == *"live vocoder"* ]]; then
+            if [[ "$_nl" == *"livevocoder"* || "$_nl" == *"live vocoder"* || "$_nl" == *"portaudio"* || "$_nl" == *"[audio stream"* ]]; then
               _SI="$_sid"
               break
             fi

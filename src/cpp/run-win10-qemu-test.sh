@@ -4,6 +4,5 @@
 # From dist-installer:  ../run-win10-qemu-test.sh
 set -euo pipefail
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-export LV_INSTALLER="${LV_INSTALLER:-$REPO/cpp/dist-installer/LiveVocoder-Setup-Windows.exe}"
-# In guest: \\10.0.2.4\qemu\Test-CarrierF32-VM-UntilOk.bat — loops until carrier .f32 pipeline succeeds.
+export LV_INSTALLER="${LV_INSTALLER:-$REPO/cpp/dist-installer/LiveVocoder-Setup.exe}"
 exec "$REPO/scripts/test-installer-qemu-win10.sh" "$@"

@@ -6,7 +6,7 @@
 #
 # Usage:
 #   ./scripts/run-windows-exe-qemu-gtk.sh
-#   ./scripts/run-windows-exe-qemu-gtk.sh /path/to/LiveVocoder-Setup-Windows.exe
+#   ./scripts/run-windows-exe-qemu-gtk.sh /path/to/LiveVocoder-Setup.exe
 #   LV_INSTALLER=/path/to/setup.exe ./scripts/run-windows-exe-qemu-gtk.sh
 #
 # Requires: qemu + OVMF + samba (smbd) — see scripts/test-installer-qemu-win10.sh header.

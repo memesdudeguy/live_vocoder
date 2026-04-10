@@ -4,5 +4,5 @@
 # From dist-installer:  ../run-win10-qemu-test.sh
 set -euo pipefail
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-export LV_INSTALLER="${LV_INSTALLER:-$REPO/cpp/dist-installer/LiveVocoder-Setup-Windows.exe}"
+export LV_INSTALLER="${LV_INSTALLER:-$REPO/cpp/dist-installer/LiveVocoder-Setup.exe}"
 exec "$REPO/scripts/test-installer-qemu-win10.sh" "$@"

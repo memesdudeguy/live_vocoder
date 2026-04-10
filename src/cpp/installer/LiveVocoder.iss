@@ -12,7 +12,7 @@
 ; https://jrsoftware.org/isinfo.php
 
 #define MyAppName "LiveVocoder"
-#define MyAppVersion "0.3.0"
+#define MyAppVersion "6.0"
 #define MyAppPublisher "live_vocoder"
 #define MyAppExeName "LiveVocoder.exe"
 

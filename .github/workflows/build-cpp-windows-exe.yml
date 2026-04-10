@@ -1,10 +1,10 @@
 # Native C++ vocoder: Windows PE .exe + MinGW DLLs (same folder runs on Windows and under Wine).
-# Artifacts (AppVersion 5.0 from installer scripts):
-#   - LiveVocoder-full-setup-v5.0 — full portable + Python (LiveVocoder_Setup_5.0.exe)
-#   - LiveVocoder-Cpp-setup-v5.0 — SDL-only minimal installers (Windows + Wine host)
+# Artifacts (AppVersion 6.0 from installer scripts):
+#   - LiveVocoder-full-setup-v6.0 — full portable + Python (LiveVocoder_Setup_6.0.exe)
+#   - LiveVocoder-Cpp-setup-v6.0 — SDL-only minimal installers (Windows + Wine host)
 #
 # Publish a GitHub Release (uploads both .exe): create and push a version tag, e.g.
-#   git tag v5.0 && git push origin v5.0
+#   git tag v6.0 && git push origin v6.0
 name: Build C++ Windows EXE
 
 on:
@@ -74,7 +74,7 @@ jobs:
           if (-not (Test-Path $iscc)) { throw "ISCC.exe not found after choco install innosetup" }
           & $iscc "$env:GITHUB_WORKSPACE\cpp\installer\LiveVocoder.iss"
 
-      - name: Minimal SDL installer payload (5.0)
+      - name: Minimal SDL installer payload (6.0)
         shell: msys2 {0}
         run: |
           set -euo pipefail
@@ -83,7 +83,7 @@ jobs:
           cd "$GITHUB_WORKSPACE/cpp"
           bash bundle-installer-minimal.sh
 
-      - name: Compile minimal Inno installers (Windows + Wine)
+      - name: Compile minimal Inno installer (Windows + Wine, single .exe)
         shell: powershell
         run: |
           $iscc = Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe"
@@ -93,27 +93,24 @@ jobs:
           if (-not (Test-Path $iscc)) { throw "ISCC.exe not found for minimal installer" }
           $iss = Join-Path $env:GITHUB_WORKSPACE "cpp\installer\LiveVocoderCppMinimal.iss"
           & $iscc $iss
-          & $iscc /DWINEHOSTINSTALLER $iss
 
       - name: Upload portable folder (exe + DLLs + Python for Wine / Windows)
         uses: actions/upload-artifact@v4
         with:
-          name: LiveVocoder-windows-v5.0
+          name: LiveVocoder-windows-v6.0
           path: cpp/dist-windows-cross/
 
-      - name: Upload full Inno Setup installer (5.0)
+      - name: Upload full Inno Setup installer (6.0)
         uses: actions/upload-artifact@v4
         with:
-          name: LiveVocoder-full-setup-v5.0
+          name: LiveVocoder-full-setup-v6.0
           path: cpp/dist-installer/LiveVocoder_Setup_*.exe
 
-      - name: Upload minimal C++ installers (5.0)
+      - name: Upload minimal C++ installers (6.0)
         uses: actions/upload-artifact@v4
         with:
-          name: LiveVocoder-Cpp-setup-v5.0
-          path: |
-            cpp/dist-installer/LiveVocoder-Setup-Windows.exe
-            cpp/dist-installer/LiveVocoder-Setup-Wine.exe
+          name: LiveVocoder-Cpp-setup-v6.0
+          path: cpp/dist-installer/LiveVocoder-Setup.exe
 
   release:
     name: Publish GitHub Release (tag builds only)
@@ -126,13 +123,13 @@ jobs:
       - name: Download full installer artifact
         uses: actions/download-artifact@v4
         with:
-          name: LiveVocoder-full-setup-v5.0
+          name: LiveVocoder-full-setup-v6.0
           path: release-assets
 
       - name: Download minimal C++ installer artifact
         uses: actions/download-artifact@v4
         with:
-          name: LiveVocoder-Cpp-setup-v5.0
+          name: LiveVocoder-Cpp-setup-v6.0
           path: release-assets
 
       - name: Create GitHub Release with installers
@@ -143,5 +140,4 @@ jobs:
           generate_release_notes: true
           files: |
             release-assets/LiveVocoder_Setup_*.exe
-            release-assets/LiveVocoder-Setup-Windows.exe
-            release-assets/LiveVocoder-Setup-Wine.exe
+            release-assets/LiveVocoder-Setup.exe

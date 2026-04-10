@@ -3,20 +3,20 @@ set -eu
 # Embedded prefix after POSIX sh is active (must match LiveVocoderCppMinimal.iss SetupEmbeddedShPrefix): default /bin/sh
 _EMBED_SH_PREFIX="${LIVE_VOCODER_EMBED_SH:-/bin/sh}"
 # POSIX sh — run the minimal Inno installer under Wine. Keep this script next to the .exe.
-# Picks (in order): LiveVocoder-Setup-Wine.exe, LiveVocoder-Setup-Windows.exe, LiveVocoder-Setup.exe
+# Picks (in order): LiveVocoder-Setup.exe, then legacy -Wine/-Windows names if present
 # Desktop Exec= should use that prefix, e.g. /bin/sh "/path/to/sh-LiveVocoder-Setup.sh"
 # Override: LIVE_VOCODER_EMBED_SH=/usr/bin/sh
 # Usage: ${_EMBED_SH_PREFIX} ./sh-LiveVocoder-Setup.sh   or   ./sh-LiveVocoder-Setup.sh (shebang)
 DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 SETUP=""
-for _cand in "$DIR/LiveVocoder-Setup-Wine.exe" "$DIR/LiveVocoder-Setup-Windows.exe" "$DIR/LiveVocoder-Setup.exe"; do
+for _cand in "$DIR/LiveVocoder-Setup.exe" "$DIR/LiveVocoder-Setup-Wine.exe" "$DIR/LiveVocoder-Setup-Windows.exe"; do
   if [ -f "$_cand" ]; then
     SETUP="$_cand"
     break
   fi
 done
 if [ -z "$SETUP" ]; then
-  echo "Missing installer .exe next to this script (expected LiveVocoder-Setup-Wine.exe or LiveVocoder-Setup-Windows.exe)." >&2
+  echo "Missing installer .exe next to this script (expected LiveVocoder-Setup.exe)." >&2
   echo "Run with embedded sh prefix: ${_EMBED_SH_PREFIX} \"$DIR/sh-LiveVocoder-Setup.sh\"" >&2
   exit 1
 fi

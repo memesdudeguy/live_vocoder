@@ -1,23 +1,15 @@
 ; Inno Setup 6 — C++ SDL only (from cpp/). Stage: ../bundle-installer-minimal.sh
-; Compile twice for two outputs:
-;   ISCC LiveVocoderCppMinimal.iss
-;       → ..\dist-installer\LiveVocoder-Setup-Windows.exe  (native Windows)
-;   ISCC /DWINEHOSTINSTALLER LiveVocoderCppMinimal.iss
-;       → ..\dist-installer\LiveVocoder-Setup-Wine.exe     (run this .exe with Wine on Linux)
+; Single output for native Windows and Wine on Linux:
+;   ISCC LiveVocoderCppMinimal.iss  →  ..\dist-installer\LiveVocoder-Setup.exe
+; Wine-only files/registry use Check: IsRunningUnderWine (install-time), not a second compile.
 ; https://jrsoftware.org/isinfo.php
 
 #define MyAppName "Live Vocoder"
-#define MyAppVersion "5.0"
+#define MyAppVersion "6.0"
 #define MyAppPublisher "memesdudeguy"
 #define MyAppExeName "LiveVocoder.exe"
-
-#ifdef WINEHOSTINSTALLER
-  #define MyOutputBase "LiveVocoder-Setup-Wine"
-  #define MyFlavorSuffix " — Wine host"
-#else
-  #define MyOutputBase "LiveVocoder-Setup-Windows"
-  #define MyFlavorSuffix " — Windows"
-#endif
+#define MyOutputBase "LiveVocoder-Setup"
+#define MyFlavorSuffix " (minimal C++)"
 ; Linux: embedded shell paths (not bare "sh"/"bash" from PATH) for .desktop and host helpers.
 #define SetupEmbeddedShPrefix "/bin/sh"
 #define SetupEmbeddedBashPrefix "/bin/bash"
@@ -28,7 +20,7 @@ AppId=com.live_vocoder.LiveVocoder.cpp.sdl.x64
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
-AppVerName={#MyAppName} {#MyAppVersion} (C++{#MyFlavorSuffix})
+AppVerName={#MyAppName} {#MyAppVersion}{#MyFlavorSuffix}
 AppCopyright=Copyright (C) {#MyAppPublisher}
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
@@ -72,17 +64,18 @@ Source: "{#MinimalRoot}\smoke_carrier.f32"; DestDir: "{app}"; Flags: ignoreversi
 Source: "{#MinimalRoot}\SmokeValidateF32.bat"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 ; Per-user carrier library (matches SDL: %USERPROFILE%\Documents\LiveVocoderCarriers). Not removed on uninstall.
 Source: "CarriersFolderReadme.txt"; DestDir: "{userdocs}\LiveVocoderCarriers"; DestName: "README.txt"; Flags: ignoreversion uninsneveruninstall
-; Linux host helper for running the Wine-named installer from the install folder (optional).
-#ifdef WINEHOSTINSTALLER
-Source: "README_Wine_Installer.txt"; DestDir: "{app}"; DestName: "README_Wine.txt"; Flags: ignoreversion skipifsourcedoesntexist
-#endif
+; Linux host notes — only when the installer itself runs under Wine (skipped on native Windows).
+Source: "README_Wine_Installer.txt"; DestDir: "{app}"; DestName: "README_Wine.txt"; Flags: ignoreversion skipifsourcedoesntexist; Check: IsRunningUnderWine
 ; Linux host helper for running this Windows installer under Wine only — not used on real Windows.
 Source: "sh-LiveVocoder-Setup.sh"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist; Check: IsRunningUnderWine
 
 [Registry]
 ; Pulse sink defaults are for Linux audio when the app runs under Wine — skip on native Windows (PortAudio/WASAPI).
-Root: HKCU; Subkey: "Environment"; ValueType: string; ValueName: "LIVE_VOCODER_PULSE_SINK"; ValueData: "live_vocoder"; Flags: uninsdeletevalue createvalueifdoesntexist; Check: IsRunningUnderWine
-Root: HKCU; Subkey: "Environment"; ValueType: string; ValueName: "PULSE_SINK"; ValueData: "live_vocoder"; Flags: uninsdeletevalue createvalueifdoesntexist; Check: IsRunningUnderWine
+; Reinstall overwrites values (no createvalueifdoesntexist) so a bad manual edit gets fixed on upgrade.
+Root: HKCU; Subkey: "Environment"; ValueType: string; ValueName: "LIVE_VOCODER_PULSE_SINK"; ValueData: "live_vocoder"; Flags: uninsdeletevalue; Check: IsRunningUnderWine
+Root: HKCU; Subkey: "Environment"; ValueType: string; ValueName: "PULSE_SINK"; ValueData: "live_vocoder"; Flags: uninsdeletevalue; Check: IsRunningUnderWine
+; Windows “compatibility mode” shim data — Wine reads AppCompatFlags\Layers for many apps; native Windows installs skip this (Check: IsRunningUnderWine is false there).
+Root: HKCU; Subkey: "Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers"; ValueType: string; ValueName: "{app}\{#MyAppExeName}"; ValueData: "~ WIN10RTM"; Flags: uninsdeletevalue; Check: IsRunningUnderWine
 
 [Icons]
 ; Under Wine, shortcuts to LiveVocoder.exe skip PipeWire setup — use the host .desktop from InstallWineLauncherScript instead.
@@ -173,7 +166,14 @@ begin
     'export PATH=/usr/bin:/bin:$PATH' + #10 +
     'WP="${WINEPREFIX:-$HOME/.wine}"' + #10 +
     'AD=$(WINEPREFIX="$WP" winepath -u "' + AppDirWin + '" 2>/dev/null || true)' + #10 +
-    'if [ -z "$AD" ] || [ ! -d "$AD" ]; then AD="$WP/drive_c/Program Files/Live Vocoder"; fi' + #10 +
+    'if [ -z "$AD" ] || [ ! -f "$AD/LiveVocoder.exe" ]; then' + #10 +
+    '  AD=""' + #10 +
+    '  _u="$(whoami)"' + #10 +
+    '  for try in "$WP/drive_c/users/$_u/AppData/Local/Programs/Live Vocoder" "$WP/drive_c/Program Files/Live Vocoder" "$WP/drive_c/Program Files (x86)/Live Vocoder"; do' + #10 +
+    '    if [ -f "$try/LiveVocoder.exe" ]; then AD="$try"; break; fi' + #10 +
+    '  done' + #10 +
+    'fi' + #10 +
+    'if [ -z "$AD" ] || [ ! -f "$AD/LiveVocoder.exe" ]; then echo "LiveVocoder: could not resolve Linux path for this Wine prefix (per-user installs use AppData/Local/Programs). Reinstall or run from repo scripts." >&2; exit 1; fi' + #10 +
     'SH="$AD/live-vocoder-wine-launch.sh"' + #10 +
     'DT="$AD/LiveVocoder_Wine.desktop"' + #10 +
     'EXE="$AD/LiveVocoder.exe"' + #10 +
@@ -237,7 +237,7 @@ begin
     '        *"application.name ="*)' + #10 +
     '          if [ -n "$_sid" ]; then' + #10 +
     '            _nl="${_line,,}"' + #10 +
-    '            if [[ "$_nl" == *"livevocoder"* || "$_nl" == *"live vocoder"* ]]; then' + #10 +
+    '            if [[ "$_nl" == *"livevocoder"* || "$_nl" == *"live vocoder"* || "$_nl" == *"portaudio"* || "$_nl" == *"[audio stream"* ]]; then' + #10 +
     '              _SI="$_sid"' + #10 +
     '              break' + #10 +
     '            fi' + #10 +
@@ -297,7 +297,14 @@ begin
     'export PATH=/usr/bin:/bin:$PATH' + #10 +
     'WP="${WINEPREFIX:-$HOME/.wine}"' + #10 +
     'AD=$(WINEPREFIX="$WP" winepath -u "' + AppDirWin + '" 2>/dev/null || true)' + #10 +
-    'if [ -z "$AD" ]; then AD="$WP/drive_c/Program Files/Live Vocoder"; fi' + #10 +
+    'if [ -z "$AD" ] || [ ! -f "$AD/LiveVocoder.exe" ]; then' + #10 +
+    '  AD=""' + #10 +
+    '  _u="$(whoami)"' + #10 +
+    '  for try in "$WP/drive_c/users/$_u/AppData/Local/Programs/Live Vocoder" "$WP/drive_c/Program Files/Live Vocoder" "$WP/drive_c/Program Files (x86)/Live Vocoder"; do' + #10 +
+    '    if [ -f "$try/LiveVocoder.exe" ]; then AD="$try"; break; fi' + #10 +
+    '  done' + #10 +
+    'fi' + #10 +
+    'if [ -z "$AD" ] || [ ! -f "$AD/live-vocoder-wine-launch.sh" ]; then echo "LiveVocoder: host launch script missing; rerun the Wine installer (non-silent) once." >&2; exit 1; fi' + #10 +
     'exec ' + ExpandConstant('{#SetupEmbeddedBashPrefix}') + ' "$AD/live-vocoder-wine-launch.sh"' + #10;
   SaveStringToFile('Z:\tmp\lv_wine_launch_entry.sh', Entry, False);
   Exec(BashExe, '-c "chmod +x /tmp/lv_wine_launch_entry.sh && exec bash /tmp/lv_wine_launch_entry.sh"',
