@@ -8,6 +8,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # C++ binary uses SDL2 + PortAudio only (no embedded Python / GTK / Tk / web from this exe).
 option(LIVE_VOCODER_CPP_SDL_GUI "SDL2 + PortAudio vocoder GUI" ON)
+option(LIVE_VOCODER_CPP_QT_GUI "Build LiveVocoderQt (Qt6 Widgets + level graph; optional second binary)" OFF)
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(FFTW REQUIRED fftw3)
@@ -15,6 +16,7 @@ pkg_check_modules(PORTAUDIO REQUIRED portaudio-2.0)
 
 add_executable(live_vocoder_cpp
     src/main.cpp
+    src/gui_audio_engine.cpp
     src/vocoder.cpp
     src/carrier_convert.cpp
     src/pa_duplex.cpp
@@ -99,6 +101,7 @@ if(NOT WIN32)
     set_target_properties(live_vocoder_cpp PROPERTIES SUFFIX ".exe")
 endif()
 if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    target_link_libraries(live_vocoder_cpp PRIVATE shell32 ole32)
     # GUI subsystem: no console window on Windows or under Wine/CrossOver (MinGW: -mwindows).
     if(LIVE_VOCODER_CPP_SDL_GUI)
         if(MSVC)
@@ -129,6 +132,41 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
 endif()
 
 target_compile_options(live_vocoder_cpp PRIVATE ${FFTW_CFLAGS_OTHER} ${PORTAUDIO_CFLAGS_OTHER})
+
+if(LIVE_VOCODER_CPP_QT_GUI)
+    find_package(Qt6 REQUIRED COMPONENTS Core Widgets)
+    set(CMAKE_AUTOMOC ON)
+    add_executable(live_vocoder_qt
+        src/qt_main.cpp
+        src/qt_gui.cpp
+        src/gui_audio_engine.cpp
+        src/vocoder.cpp
+        src/carrier_convert.cpp
+        src/pa_duplex.cpp
+        src/linux_pulse_env.cpp
+    )
+    target_include_directories(live_vocoder_qt PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/src"
+        "${CMAKE_CURRENT_SOURCE_DIR}/third_party"
+        ${FFTW_INCLUDE_DIRS}
+        ${PORTAUDIO_INCLUDE_DIRS}
+    )
+    target_link_libraries(live_vocoder_qt PRIVATE
+        Qt6::Core
+        Qt6::Widgets
+        ${FFTW_LIBRARIES}
+        ${PORTAUDIO_LIBRARIES}
+    )
+    if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+        target_link_libraries(live_vocoder_qt PRIVATE shell32 ole32)
+    endif()
+    target_compile_options(live_vocoder_qt PRIVATE ${FFTW_CFLAGS_OTHER} ${PORTAUDIO_CFLAGS_OTHER})
+    set_target_properties(live_vocoder_qt PROPERTIES OUTPUT_NAME "LiveVocoderQt")
+    if(NOT WIN32)
+        set_target_properties(live_vocoder_qt PROPERTIES SUFFIX ".exe")
+    endif()
+    message(STATUS "Qt6 GUI: ON (target live_vocoder_qt)")
+endif()
 
 # Inno Setup → dist-installer/LiveVocoderCpp_Setup_*.exe (CMake *host* Windows only).
 # When cross-compiling Linux→Windows, WIN32 is true for the *target* but the host is not Windows;

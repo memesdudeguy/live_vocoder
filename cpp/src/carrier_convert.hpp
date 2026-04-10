@@ -9,6 +9,8 @@ bool carrier_path_is_raw_f32(const std::filesystem::path& path);
 
 #if defined(_WIN32)
 std::filesystem::path carrier_win32_localize_path_for_filesystem(const std::filesystem::path& raw);
+/** Shell "Documents" / My Documents (current path; honors folder relocation). Empty if unavailable. */
+std::filesystem::path carrier_win32_documents_folder();
 #endif
 
 /**

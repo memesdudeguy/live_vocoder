@@ -105,10 +105,15 @@ bool ci_substr(const std::string& hay, const char* needle) {
     return false;
 }
 
+bool sink_name_matches_live_vocoder_brand(const std::string& s) {
+    // PipeWire often names nodes "LiveVocoder-3" (no underscore); pactl may use "live_vocoder".
+    return ci_substr(s, "live_vocoder") || ci_substr(s, "livevocoder");
+}
+
 std::vector<std::string> sinks_matching_live_vocoder(const std::vector<std::string>& sinks) {
     std::vector<std::string> out;
     for (const auto& s : sinks) {
-        if (ci_substr(s, "live_vocoder")) {
+        if (sink_name_matches_live_vocoder_brand(s)) {
             out.push_back(s);
         }
     }
@@ -1031,6 +1036,51 @@ void lv_linux_wine_move_livevocoder_sink_input_to_pulse_sink(const char* pulse_s
 void lv_linux_wine_move_livevocoder_sink_input_after_pa_start() {
 #if defined(_WIN32)
     lv_win32_wine_move_livevocoder_sink_input_after_pa_start_impl();
+#endif
+}
+
+void lv_linux_move_livevocoder_sink_input_after_pa_start() {
+#if !defined(__linux__)
+    return;
+#else
+    if (!pactl_cli_available()) {
+        return;
+    }
+    std::string sn;
+    if (const char* ps = std::getenv("PULSE_SINK"); ps != nullptr && ps[0] != '\0') {
+        sn = sanitize_pulse_sink_token(ps);
+    }
+    if (sn.empty()) {
+        if (const char* lv = std::getenv("LIVE_VOCODER_PULSE_SINK"); lv != nullptr && lv[0] != '\0') {
+            sn = sanitize_pulse_sink_token(lv);
+        }
+    }
+    if (sn.empty()) {
+        std::vector<std::string> sinks = pactl_short_names("sinks");
+        sn = resolve_sink_name(sinks);
+    }
+    if (sn.empty()) {
+        return;
+    }
+    {
+        std::vector<std::string> sinks = pactl_short_names("sinks");
+        if (!vector_contains(sinks, sn)) {
+            return;
+        }
+    }
+    const std::string qsk = lv_export_sh_single_quote_bash(sn);
+    for (int attempt = 0; attempt < 32; ++attempt) {
+        usleep(110000);
+        const std::string inner =
+            std::string("export PATH=/usr/bin:/bin:$PATH\nsn=") + qsk +
+            ";sid=$(pactl list short sinks | awk -v w=\"$sn\" 'BEGIN{FS=\"\t\"} "
+            "{gsub(/^[ \\t]+|[ \\t]+$/,\"\",$2);if($2==w)i=$1}END{print i}');"
+            "id=$(pactl list sink-inputs | awk '/^Sink Input #[0-9]+/{sub(/^Sink Input #/,\"\",$0);"
+            "gsub(/[^0-9].*/,\"\",$0);sid=$0}"
+            "$0 ~ /application\\.name = / && $0 ~ /[Ll]ive[Vv]ocoder|[Ll]ive [Vv]ocoder|PortAudio|portaudio/{print sid;exit}');"
+            "if test -n \"$id\" && test -n \"$sid\"; then pactl move-sink-input \"$id\" \"$sid\"; fi";
+        (void)std::system(("bash -lc " + lv_export_sh_single_quote_bash(inner)).c_str());
+    }
 #endif
 }
 

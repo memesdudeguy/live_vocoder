@@ -19,17 +19,21 @@
 #include <atomic>
 #include <cmath>
 #include <cctype>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <list>
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "carrier_convert.hpp"
+#include "gui_audio_engine.hpp"
 #include "linux_pulse_env.hpp"
 #include "pa_duplex.hpp"
 #include "vocoder.hpp"
@@ -43,9 +47,6 @@
 #endif
 
 namespace {
-
-constexpr int kSr = 48000;
-constexpr int kHop = 512;
 
 /** Skip welcome / font SDL message boxes (automation, dummy video, CI). Errors still use modals. */
 bool sdl_skip_startup_modals() {
@@ -80,6 +81,35 @@ constexpr Rgba kChipSelFace{56, 48, 88, 255};
 constexpr Rgba kChipSelBorder{150, 128, 220, 220};
 constexpr Rgba kMicPink{255, 166, 243, 255};
 
+/** sdl_show_themed_message_box uses the OS light theme; colorScheme matches vm-card palette where SDL supports it. */
+void sdl_show_themed_message_box(Uint32 flags, const char* title, const char* message, SDL_Window* window) {
+    SDL_MessageBoxButtonData button{};
+    button.flags = SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT;
+    button.buttonid = 0;
+    button.text = "OK";
+
+    SDL_MessageBoxColorScheme scheme{};
+    scheme.colors[SDL_MESSAGEBOX_COLOR_BACKGROUND] = {kCardFill.r, kCardFill.g, kCardFill.b};
+    scheme.colors[SDL_MESSAGEBOX_COLOR_TEXT] = {kBrand.r, kBrand.g, kBrand.b};
+    scheme.colors[SDL_MESSAGEBOX_COLOR_BUTTON_BORDER] = {kSection.r, kSection.g, kSection.b};
+    scheme.colors[SDL_MESSAGEBOX_COLOR_BUTTON_BACKGROUND] = {kGhostFace.r, kGhostFace.g, kGhostFace.b};
+    scheme.colors[SDL_MESSAGEBOX_COLOR_BUTTON_SELECTED] = {kPrimaryBtn.r, kPrimaryBtn.g, kPrimaryBtn.b};
+
+    SDL_MessageBoxData data{};
+    data.flags = flags;
+    data.window = window;
+    data.title = title;
+    data.message = message;
+    data.numbuttons = 1;
+    data.buttons = &button;
+    data.colorScheme = &scheme;
+
+    int buttonid = 0;
+    (void)SDL_ShowMessageBox(&data, &buttonid);
+}
+
+using App = lv_gui::LiveVocoderAudioApp;
+
 struct PresetDef {
     const char* label;
     double wet;
@@ -92,128 +122,6 @@ constexpr PresetDef kPresets[] = {
     {"Deep", 1.35, 2.0, 0.18f},
     {"Studio", 1.15, 5.0, 0.12f},
 };
-
-/** Cheap comb delay + wet/dry (fixed decay; mix from UI). RT-safe, no heap in process(). */
-struct LightReverb {
-    std::vector<float> buf_{};
-    int pos_{0};
-    int len_{0};
-    float fb_{0.48f};
-
-    void reset() {
-        std::fill(buf_.begin(), buf_.end(), 0.f);
-        pos_ = 0;
-    }
-
-    void configure(int sample_rate, float room) {
-        room = std::clamp(room, 0.f, 1.f);
-        len_ = std::clamp(static_cast<int>(static_cast<float>(sample_rate) * (0.022f + room * 0.055f)), 400, 4800);
-        fb_ = 0.32f + room * 0.52f;
-        buf_.assign(static_cast<std::size_t>(len_), 0.f);
-        pos_ = 0;
-    }
-
-    void process(float* data, int n, float mix) {
-        if (mix < 1e-5f || len_ <= 0 || buf_.empty()) {
-            return;
-        }
-        for (int i = 0; i < n; ++i) {
-            const float x = data[i];
-            const int p = pos_;
-            const float d = buf_[static_cast<std::size_t>(p)];
-            buf_[static_cast<std::size_t>(p)] = x + fb_ * d;
-            pos_ = (p + 1) % len_;
-            data[i] = x * (1.f - mix) + d * mix;
-        }
-    }
-};
-
-struct App {
-    std::unique_ptr<StreamingVocoderCpp> voc;
-    LightReverb reverb{};
-    std::atomic<bool> clean_mic{false};
-    std::atomic<bool> monitor_on{true};
-    std::atomic<float> reverb_mix{0.f};
-    /** True when duplex output device is a null/virt sink (see pa_duplex_output_targets_virt_sink_route). */
-    std::atomic<bool> pulse_virt_sink_output{false};
-    /** Peak |sample| this block, mic in (always updated while streaming). */
-    std::atomic<float> meter_in_peak{0.f};
-    /** Peak |sample| this block, left channel sent to playback (0 if fully muted). */
-    std::atomic<float> meter_out_peak{0.f};
-};
-
-int pa_callback(const void* in, void* out, unsigned long frames, const PaStreamCallbackTimeInfo*,
-                PaStreamCallbackFlags, void* user) {
-    auto* app = static_cast<App*>(user);
-    const auto* in_ch = static_cast<const float*>(in);
-    float* out_ch = static_cast<float*>(out);
-
-    float peak_in = 0.f;
-    if (in_ch) {
-        for (unsigned long i = 0; i < frames; ++i) {
-            peak_in = std::max(peak_in, std::fabs(in_ch[i]));
-        }
-    }
-    app->meter_in_peak.store(peak_in, std::memory_order_relaxed);
-
-    auto store_out_peak = [&]() {
-        float pk = 0.f;
-        for (unsigned long i = 0; i < frames; ++i) {
-            pk = std::max(pk, std::fabs(out_ch[i * 2]));
-        }
-        app->meter_out_peak.store(pk, std::memory_order_relaxed);
-    };
-
-    const bool monitoring = app->monitor_on.load(std::memory_order_relaxed);
-    const bool sink_for_discord = app->pulse_virt_sink_output.load(std::memory_order_relaxed);
-    if (!monitoring && !sink_for_discord) {
-        for (unsigned long i = 0; i < frames; ++i) {
-            out_ch[i * 2] = out_ch[i * 2 + 1] = 0.f;
-        }
-        app->meter_out_peak.store(0.f, std::memory_order_relaxed);
-        return paContinue;
-    }
-
-    std::vector<float> mono(frames);
-    if (in_ch) {
-        for (unsigned long i = 0; i < frames; ++i) {
-            mono[i] = in_ch[i];
-        }
-    } else {
-        std::fill(mono.begin(), mono.end(), 0.f);
-    }
-
-    StreamingVocoderCpp* voc = app->voc.get();
-    if (voc == nullptr) {
-        const float rm = app->reverb_mix.load(std::memory_order_relaxed);
-        if (rm > 1e-5f) {
-            app->reverb.process(mono.data(), static_cast<int>(frames), rm);
-        }
-        for (unsigned long i = 0; i < frames; ++i) {
-            const float s = mono[i];
-            out_ch[i * 2] = out_ch[i * 2 + 1] = s;
-        }
-        store_out_peak();
-        return paContinue;
-    }
-
-    std::vector<float> vbuf(frames);
-    int produced = voc->process_block(mono.data(), static_cast<int>(frames), vbuf.data(), static_cast<int>(frames));
-    const float rm = app->reverb_mix.load(std::memory_order_relaxed);
-    if (rm > 1e-5f && produced > 0) {
-        app->reverb.process(vbuf.data(), produced, rm);
-    }
-
-    for (unsigned long i = 0; i < static_cast<unsigned long>(produced); ++i) {
-        float s = vbuf[i];
-        out_ch[i * 2] = out_ch[i * 2 + 1] = s;
-    }
-    for (unsigned long i = static_cast<unsigned long>(produced); i < frames; ++i) {
-        out_ch[i * 2] = out_ch[i * 2 + 1] = 0.f;
-    }
-    store_out_peak();
-    return paContinue;
-}
 
 std::vector<double> load_carrier_f32(const char* path) {
     std::ifstream f(path, std::ios::binary);
@@ -258,9 +166,15 @@ std::filesystem::path resolve_exe_dir(char* argv0) {
     return std::filesystem::path(argv0).parent_path();
 }
 
-/** Same folder as Python GTK: ~/Documents/LiveVocoderCarriers (see carrier_library.py). */
+/** Same folder as Python GTK: Documents/LiveVocoderCarriers (see carrier_library.py). */
 std::filesystem::path documents_livevocoder_dir() {
 #if defined(_WIN32)
+    {
+        const std::filesystem::path shell_docs = carrier_win32_documents_folder();
+        if (!shell_docs.empty()) {
+            return shell_docs / "LiveVocoderCarriers";
+        }
+    }
     const char* up = std::getenv("USERPROFILE");
     if (up != nullptr && up[0] != '\0') {
         return std::filesystem::path(up) / "Documents" / "LiveVocoderCarriers";
@@ -397,7 +311,7 @@ bool ingest_dropped_carrier(const std::filesystem::path& exe_dir, const std::fil
         stem = "carrier";
     }
     const std::filesystem::path dest = lib / (stem.string() + ".f32");
-    if (!carrier_ffmpeg_to_f32(kSr, dropped_use, dest, err)) {
+    if (!carrier_ffmpeg_to_f32(lv_gui::kSampleRate, dropped_use, dest, err)) {
         return false;
     }
     out_path = dest;
@@ -420,6 +334,7 @@ void set_title(SDL_Window* w, const std::string& carrier_label, bool streaming, 
         t += "carrier idle · ";
     }
     t += carrier_label.empty() ? "no carrier" : carrier_label;
+    t += " · memesdudeguy";
     SDL_SetWindowTitle(w, t.c_str());
 }
 
@@ -483,6 +398,38 @@ void draw_gradient_bg(SDL_Renderer* ren, int w, int h) {
         SDL_SetRenderDrawColor(ren, r, g, b, 255);
         SDL_RenderDrawLine(ren, 0, y, w, y);
     }
+}
+
+/** Bake gradient once per window size; avoids hundreds of draw calls per frame. */
+bool ensure_gradient_bg_texture(SDL_Renderer* ren, SDL_Texture** tex, int* cached_w, int* cached_h, int w, int h) {
+    if (w <= 0 || h <= 0) {
+        return false;
+    }
+    if (*tex != nullptr && *cached_w == w && *cached_h == h) {
+        return true;
+    }
+    if (*tex != nullptr) {
+        SDL_DestroyTexture(*tex);
+        *tex = nullptr;
+    }
+    if (SDL_RenderTargetSupported(ren) == SDL_FALSE) {
+        return false;
+    }
+    *tex = SDL_CreateTexture(ren, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, w, h);
+    if (*tex == nullptr) {
+        return false;
+    }
+    SDL_SetTextureBlendMode(*tex, SDL_BLENDMODE_NONE);
+    if (SDL_SetRenderTarget(ren, *tex) != 0) {
+        SDL_DestroyTexture(*tex);
+        *tex = nullptr;
+        return false;
+    }
+    draw_gradient_bg(ren, w, h);
+    SDL_SetRenderTarget(ren, nullptr);
+    *cached_w = w;
+    *cached_h = h;
+    return true;
 }
 
 void fill_round_rect(SDL_Renderer* ren, const SDL_FRect& box, float rad, const Rgba& fill) {
@@ -554,25 +501,86 @@ void lighten_rgba(Rgba& c, int d) {
     c.b = static_cast<Uint8>(std::min(255, static_cast<int>(c.b) + d));
 }
 
+/** LRU TTF→texture cache: labels/buttons were re-rasterized every frame (major CPU cost). */
+struct TextTexCache {
+    struct Entry {
+        SDL_Texture* tex = nullptr;
+        int w = 0;
+        int h = 0;
+        std::list<std::string>::iterator lru_it{};
+    };
+    std::unordered_map<std::string, Entry> map_;
+    std::list<std::string> order_;
+    static constexpr std::size_t kMax = 160;
+
+    static std::string make_key(TTF_Font* font, const Rgba& c, const char* t) {
+        std::string k;
+        const auto fp = reinterpret_cast<std::uintptr_t>(font);
+        k.append(reinterpret_cast<const char*>(&fp), sizeof(fp));
+        k.push_back(static_cast<char>(c.r));
+        k.push_back(static_cast<char>(c.g));
+        k.push_back(static_cast<char>(c.b));
+        k.push_back(static_cast<char>(c.a));
+        k.append(t);
+        return k;
+    }
+
+    void clear() {
+        for (auto& kv : map_) {
+            if (kv.second.tex != nullptr) {
+                SDL_DestroyTexture(kv.second.tex);
+            }
+        }
+        map_.clear();
+        order_.clear();
+    }
+
+    void blit(SDL_Renderer* ren, TTF_Font* font, const char* text, const Rgba& color, float x, float y) {
+        if (!font || !text || !*text) {
+            return;
+        }
+        const std::string k = make_key(font, color, text);
+        auto it = map_.find(k);
+        if (it != map_.end()) {
+            order_.erase(it->second.lru_it);
+            order_.push_back(k);
+            it->second.lru_it = std::prev(order_.end());
+            SDL_FRect dst{x, y, static_cast<float>(it->second.w), static_cast<float>(it->second.h)};
+            SDL_RenderCopyF(ren, it->second.tex, nullptr, &dst);
+            return;
+        }
+        SDL_Surface* surf = TTF_RenderUTF8_Blended(font, text, SDL_Color{color.r, color.g, color.b, color.a});
+        if (!surf) {
+            return;
+        }
+        SDL_Texture* tex = SDL_CreateTextureFromSurface(ren, surf);
+        SDL_FreeSurface(surf);
+        if (!tex) {
+            return;
+        }
+        SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
+        int tw = 0, th = 0;
+        SDL_QueryTexture(tex, nullptr, nullptr, &tw, &th);
+        while (map_.size() >= kMax) {
+            const std::string& old = order_.front();
+            auto oit = map_.find(old);
+            if (oit != map_.end()) {
+                SDL_DestroyTexture(oit->second.tex);
+                map_.erase(oit);
+            }
+            order_.pop_front();
+        }
+        order_.push_back(k);
+        map_[k] = {tex, tw, th, std::prev(order_.end())};
+        SDL_FRect dst{x, y, static_cast<float>(tw), static_cast<float>(th)};
+        SDL_RenderCopyF(ren, tex, nullptr, &dst);
+    }
+};
+
+static TextTexCache g_text_tex_cache;
+
 void blit_text(SDL_Renderer* ren, TTF_Font* font, const char* text, const Rgba& color, float x, float y) {
-    if (!font || !text || !*text) {
-        return;
-    }
-    SDL_Surface* surf = TTF_RenderUTF8_Blended(font, text, SDL_Color{color.r, color.g, color.b, color.a});
-    if (!surf) {
-        return;
-    }
-    SDL_Texture* tex = SDL_CreateTextureFromSurface(ren, surf);
-    SDL_FreeSurface(surf);
-    if (!tex) {
-        return;
-    }
-    SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
-    int tw = 0, th = 0;
-    SDL_QueryTexture(tex, nullptr, nullptr, &tw, &th);
-    SDL_FRect dst{x, y, static_cast<float>(tw), static_cast<float>(th)};
-    SDL_RenderCopyF(ren, tex, nullptr, &dst);
-    SDL_DestroyTexture(tex);
+    g_text_tex_cache.blit(ren, font, text, color, x, y);
 }
 
 std::string ellipsize_utf8(const std::string& s, TTF_Font* font, int max_px) {
@@ -1111,7 +1119,7 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
     std::error_code ec_lib;
     const std::filesystem::path lib = carrier_library_dir(exe_dir);
     std::filesystem::create_directories(lib, ec_lib);
-    carrier_convert_audio_in_folder(kSr, lib);
+    carrier_convert_audio_in_folder(lv_gui::kSampleRate, lib);
     const std::filesystem::path exe_carriers = exe_dir / "LiveVocoderCarriers";
     ec_lib.clear();
     if (std::filesystem::is_directory(exe_carriers, ec_lib)) {
@@ -1120,7 +1128,7 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
         std::error_code ec2;
         const auto exe_can = std::filesystem::weakly_canonical(exe_carriers, ec2);
         if (!ec_lib && !ec2 && lib_can != exe_can) {
-            carrier_convert_audio_in_folder(kSr, exe_carriers);
+            carrier_convert_audio_in_folder(lv_gui::kSampleRate, exe_carriers);
         }
     }
 
@@ -1144,6 +1152,9 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
         return 1;
     }
     SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "1");
+#if defined(SDL_HINT_RENDER_BATCHING)
+    SDL_SetHint(SDL_HINT_RENDER_BATCHING, "1");
+#endif
 
     if (TTF_Init() != 0) {
         std::fprintf(stderr, "TTF_Init: %s\n", TTF_GetError());
@@ -1203,16 +1214,15 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
                 }
                 const std::filesystem::path dest = lib / (stem.string() + ".f32");
                 std::string conv_err;
-                if (carrier_ffmpeg_to_f32(kSr, cp, dest, conv_err)) {
+                if (carrier_ffmpeg_to_f32(lv_gui::kSampleRate, cp, dest, conv_err)) {
                     carrier_path = dest.string();
                     carrier_label = dest.filename().string();
                 } else {
                     if (sdl_skip_startup_modals()) {
                         std::fprintf(stderr, "Live Vocoder: ffmpeg carrier conversion failed: %s\n", conv_err.c_str());
                     } else {
-                        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_WARNING, "Live Vocoder",
-                                                 ("Could not convert startup carrier with ffmpeg (install ffmpeg, PATH):\n" +
-                                                  conv_err)
+                        sdl_show_themed_message_box(SDL_MESSAGEBOX_WARNING, "Live Vocoder — carrier conversion",
+                                                 ("Could not convert startup carrier (see README.txt):\n\n" + conv_err)
                                                      .c_str(),
                                                  window);
                     }
@@ -1247,17 +1257,18 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
                         "Or click Library… in the voice card to choose a file already in that folder.\n"
                         "Or place carrier.f32 there / next to the app. Needs ffmpeg on PATH for non-.f32.\n"
                         "Clean mic needs no carrier.\n\n") +
-            kMonitorHelp;
+            kMonitorHelp + "\n\n— memesdudeguy";
         if (!sdl_skip_startup_modals()) {
-            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, "Live Vocoder", welcome.c_str(), window);
+            sdl_show_themed_message_box(SDL_MESSAGEBOX_INFORMATION, "Live Vocoder", welcome.c_str(), window);
         }
     } else {
         if (!sdl_skip_startup_modals()) {
-            SDL_ShowSimpleMessageBox(
+            sdl_show_themed_message_box(
                 SDL_MESSAGEBOX_WARNING, "Live Vocoder",
                 "No UI font found. Install fonts/DejaVuSans.ttf next to the executable (see README), "
                 "or use Segoe UI on Windows.\n\n"
-                "Controls still work: header Start / Stop / Quit; drop audio or .f32 (saved under LiveVocoderCarriers).",
+                "Controls still work: header Start / Stop / Quit; drop audio or .f32 (saved under LiveVocoderCarriers).\n\n"
+                "— memesdudeguy",
                 window);
         } else {
             std::fprintf(stderr, "Live Vocoder: no UI font; place fonts/DejaVuSans.ttf next to the executable.\n");
@@ -1273,7 +1284,7 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
 
     PaError pa_err = Pa_Initialize();
     if (pa_err != paNoError) {
-        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "PortAudio", Pa_GetErrorText(pa_err), window);
+        sdl_show_themed_message_box(SDL_MESSAGEBOX_ERROR, "PortAudio", Pa_GetErrorText(pa_err), window);
         if (header_logo_tex != nullptr) {
             SDL_DestroyTexture(header_logo_tex);
             header_logo_tex = nullptr;
@@ -1375,6 +1386,18 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
             return;
         }
         if (!app.pulse_virt_sink_output.load(std::memory_order_relaxed)) {
+#if defined(__linux__)
+            // App stream may be on a LiveVocoder* null sink (e.g. pavugraph move) while PortAudio still
+            // reports "Built-in Audio" — still wire null-sink monitor → default sink for Fix A (Monitor on).
+            {
+                const std::string ps_r = lv_linux_monitor_pulse_sink_base_for_loopback();
+                if (!ps_r.empty()) {
+                    lv_linux_sync_speaker_monitor_loopback(true, ps_r.c_str());
+                } else {
+                    lv_linux_sync_speaker_monitor_loopback(false, nullptr);
+                }
+            }
+#endif
             sync_linux_physical_monitor_mute();
             return;
         }
@@ -1417,6 +1440,8 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
         app.reverb.reset();
         app.meter_in_peak.store(0.f, std::memory_order_relaxed);
         app.meter_out_peak.store(0.f, std::memory_order_relaxed);
+        app.test_beep_frames_left.store(0, std::memory_order_relaxed);
+        app.test_beep_phase = 0.f;
         streaming = false;
         sync_virt_sink_speaker_loopback();
         refresh_title();
@@ -1426,10 +1451,10 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
         if (app.clean_mic.load(std::memory_order_relaxed)) {
             stop_stream();
             app.voc.reset();
-            PaError err = pa_open_livevocoder_duplex(&stream, static_cast<double>(kSr),
-                                                   static_cast<unsigned long>(kHop), pa_callback, &app);
+            PaError err = pa_open_livevocoder_duplex(&stream, static_cast<double>(lv_gui::kSampleRate),
+                                                   static_cast<unsigned long>(lv_gui::kHop), lv_gui::livevocoder_gui_pa_callback, &app);
             if (err != paNoError) {
-                SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "PortAudio", Pa_GetErrorText(err), window);
+                sdl_show_themed_message_box(SDL_MESSAGEBOX_ERROR, "PortAudio", Pa_GetErrorText(err), window);
                 return false;
             }
             pa_log_stream_devices(stream);
@@ -1440,13 +1465,15 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
                 stream = nullptr;
                 pa_duplex_note_stream_closed();
                 app.pulse_virt_sink_output.store(false, std::memory_order_relaxed);
-                SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "PortAudio", Pa_GetErrorText(err), window);
+                sdl_show_themed_message_box(SDL_MESSAGEBOX_ERROR, "PortAudio", Pa_GetErrorText(err), window);
                 return false;
             }
-#if defined(_WIN32)
+#if defined(__linux__)
+            lv_linux_move_livevocoder_sink_input_after_pa_start();
+#elif defined(_WIN32)
             lv_linux_wine_move_livevocoder_sink_input_after_pa_start();
 #endif
-            app.reverb.configure(kSr, 0.55f);
+            app.reverb.configure(lv_gui::kSampleRate, 0.55f);
             app.reverb_mix.store(ui_reverb_mix, std::memory_order_relaxed);
             streaming = true;
             sync_virt_sink_speaker_loopback();
@@ -1455,7 +1482,7 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
         }
 
         if (carrier_path.empty()) {
-            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_WARNING, "Live Vocoder",
+            sdl_show_themed_message_box(SDL_MESSAGEBOX_WARNING, "Live Vocoder",
                                      "Vocode mode needs a carrier (audio file or .f32). Use Library… in the voice card, "
                                      "drop a file, choose Clean mic, or put carrier.f32 in "
                                      "Documents/LiveVocoderCarriers or next to the executable.",
@@ -1468,7 +1495,7 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
 #endif
         std::error_code fsec;
         if (!std::filesystem::is_regular_file(cp, fsec)) {
-            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Live Vocoder", "Carrier file is not available.", window);
+            sdl_show_themed_message_box(SDL_MESSAGEBOX_ERROR, "Live Vocoder", "Carrier file is not available.", window);
             return false;
         }
         if (!carrier_path_is_raw_f32(cp)) {
@@ -1480,9 +1507,9 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
             }
             const std::filesystem::path dest = lib / (stem.string() + ".f32");
             std::string conv_err;
-            if (!carrier_ffmpeg_to_f32(kSr, cp, dest, conv_err)) {
-                SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "ffmpeg",
-                                         ("Could not convert carrier to f32 (install ffmpeg, PATH):\n" + conv_err)
+            if (!carrier_ffmpeg_to_f32(lv_gui::kSampleRate, cp, dest, conv_err)) {
+                sdl_show_themed_message_box(SDL_MESSAGEBOX_ERROR, "Live Vocoder — carrier conversion",
+                                         ("Could not convert to .f32 (see README.txt next to the app):\n\n" + conv_err)
                                              .c_str(),
                                          window);
                 return false;
@@ -1495,27 +1522,27 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
         try {
             carrier = load_carrier_f32(carrier_path.c_str());
         } catch (const std::exception& e) {
-            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Carrier", e.what(), window);
+            sdl_show_themed_message_box(SDL_MESSAGEBOX_ERROR, "Carrier", e.what(), window);
             return false;
         }
         stop_stream();
         try {
-            app.voc = std::make_unique<StreamingVocoderCpp>(std::move(carrier), kSr, 2048, kHop, preset_wet, 36,
+            app.voc = std::make_unique<StreamingVocoderCpp>(std::move(carrier), lv_gui::kSampleRate, 2048, lv_gui::kHop, preset_wet, 36,
                                                             0.62, 0.88, preset_presence, 1800.0, 1.0);
         } catch (const std::exception& e) {
-            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Vocoder", e.what(), window);
+            sdl_show_themed_message_box(SDL_MESSAGEBOX_ERROR, "Vocoder", e.what(), window);
             return false;
         }
         app.voc->set_wet_level(preset_wet);
         app.voc->set_mod_presence_db(ui_clarity_db);
-        app.reverb.configure(kSr, 0.55f);
+        app.reverb.configure(lv_gui::kSampleRate, 0.55f);
         app.reverb_mix.store(ui_reverb_mix, std::memory_order_relaxed);
 
-        PaError err = pa_open_livevocoder_duplex(&stream, static_cast<double>(kSr),
-                                                 static_cast<unsigned long>(kHop), pa_callback, &app);
+        PaError err = pa_open_livevocoder_duplex(&stream, static_cast<double>(lv_gui::kSampleRate),
+                                                 static_cast<unsigned long>(lv_gui::kHop), lv_gui::livevocoder_gui_pa_callback, &app);
         if (err != paNoError) {
             app.voc.reset();
-            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "PortAudio", Pa_GetErrorText(err), window);
+            sdl_show_themed_message_box(SDL_MESSAGEBOX_ERROR, "PortAudio", Pa_GetErrorText(err), window);
             return false;
         }
         pa_log_stream_devices(stream);
@@ -1527,10 +1554,12 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
             pa_duplex_note_stream_closed();
             app.pulse_virt_sink_output.store(false, std::memory_order_relaxed);
             app.voc.reset();
-            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "PortAudio", Pa_GetErrorText(err), window);
+            sdl_show_themed_message_box(SDL_MESSAGEBOX_ERROR, "PortAudio", Pa_GetErrorText(err), window);
             return false;
         }
-#if defined(_WIN32)
+#if defined(__linux__)
+        lv_linux_move_livevocoder_sink_input_after_pa_start();
+#elif defined(_WIN32)
         lv_linux_wine_move_livevocoder_sink_input_after_pa_start();
 #endif
         streaming = true;
@@ -1544,7 +1573,7 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
     int carrier_picker_scroll = 0;
 
     auto refresh_carrier_picker_list = [&]() {
-        carrier_convert_audio_in_folder(kSr, lib);
+        carrier_convert_audio_in_folder(lv_gui::kSampleRate, lib);
         carrier_collect_library_entries(lib, carrier_picker_entries);
         carrier_picker_scroll = 0;
     };
@@ -1554,6 +1583,9 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
     float meter_disp_out = 0.f;
     int mx = 0, my = 0;
     int slider_drag = -1;
+    SDL_Texture* bg_grad_tex = nullptr;
+    int bg_grad_cw = 0;
+    int bg_grad_ch = 0;
     while (!quit) {
         int ww = 640, wh = 600;
         SDL_GetWindowSize(window, &ww, &wh);
@@ -1598,6 +1630,10 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
         while (SDL_PollEvent(&e)) {
             if (e.type == SDL_QUIT) {
                 quit = true;
+            } else if (e.type == SDL_KEYDOWN && e.key.repeat == 0 && e.key.keysym.sym == SDLK_F9) {
+                if (streaming) {
+                    app.test_beep_frames_left.store(lv_gui::kSampleRate / 2, std::memory_order_relaxed);
+                }
             } else if (e.type == SDL_WINDOWEVENT && e.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
                 // layout refresh next frame
             } else if (e.type == SDL_MOUSEMOTION) {
@@ -1634,7 +1670,7 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
                     std::filesystem::path stored;
                     std::string ierr;
                     if (!ingest_dropped_carrier(exe_dir, std::filesystem::path(dropped), stored, ierr)) {
-                        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Live Vocoder",
+                        sdl_show_themed_message_box(SDL_MESSAGEBOX_ERROR, "Live Vocoder",
                                                  ("Could not add carrier (ffmpeg required for non-.f32):\n" + ierr)
                                                      .c_str(),
                                                  window);
@@ -1691,7 +1727,7 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
                     quit = true;
                 } else if (hh == 3) {
 #if defined(_WIN32)
-                    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, "Live Vocoder — Help",
+                    sdl_show_themed_message_box(SDL_MESSAGEBOX_INFORMATION, "Live Vocoder — Help",
                                              "Vocode: drop WAV/MP3/FLAC/etc. or .f32 — other formats are converted with "
                                              "ffmpeg (install ffmpeg, PATH) to mono 48 kHz f32 under "
                                              "Documents/LiveVocoderCarriers.\n"
@@ -1707,10 +1743,12 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
                                              "*_INDEX; LIVE_VOCODER_PA_LIST_DEVICES=1 lists devices.\n"
                                              "Under Wine on Linux, the stream appears on the host as a normal Pulse/PipeWire "
                                              "client — use your desktop’s audio tools to route or monitor it.\n"
-                                             "While streaming, Mic in / Output meters show levels.",
+                                             "While streaming, Mic in / Output meters show levels.\n"
+                                             "Press F9 for a short test beep on the output path.\n\n"
+                                             "— memesdudeguy",
                                              window);
 #else
-                    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, "Live Vocoder — Help",
+                    sdl_show_themed_message_box(SDL_MESSAGEBOX_INFORMATION, "Live Vocoder — Help",
                                              "Vocode: drop WAV/MP3/FLAC/etc. or .f32 — other formats are converted with "
                                              "ffmpeg (install ffmpeg, PATH) to mono 48 kHz f32 under "
                                              "Documents/LiveVocoderCarriers.\n"
@@ -1727,7 +1765,10 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
                                              "Linux routing: LIVE_VOCODER_PULSE_SINK or PULSE_SINK for a null sink before "
                                              "PortAudio opens; LIVE_VOCODER_PA_OUTPUT=Null (substring) or "
                                              "LIVE_VOCODER_PA_LIST_DEVICES=1 to pick devices. The status line summarizes "
-                                             "PipeWire when pactl is available.",
+                                             "PipeWire when pactl is available.\n"
+                                             "While streaming, press F9 for a short test beep on the output path (virtual "
+                                             "sink / monitor).\n\n"
+                                             "— memesdudeguy",
                                              window);
 #endif
                 } else {
@@ -1792,7 +1833,11 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
         }
 
         SDL_RenderSetViewport(ren, nullptr);
-        draw_gradient_bg(ren, ww, wh);
+        if (ensure_gradient_bg_texture(ren, &bg_grad_tex, &bg_grad_cw, &bg_grad_ch, ww, wh)) {
+            SDL_RenderCopy(ren, bg_grad_tex, nullptr, nullptr);
+        } else {
+            draw_gradient_bg(ren, ww, wh);
+        }
         // Solid header strip (reference: flat bar over the gradient)
         if (lay.card.y > 1.f) {
             set_color(ren, kBgTop);
@@ -1806,7 +1851,7 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
             const std::string title_show = ellipsize_utf8(std::string("Live Vocoder"), fonts.brand, lay.title_max_px);
             blit_text(ren, fonts.brand, title_show.c_str(), kBrand, lay.text_left, lay.title_y);
             const std::string sub_full =
-                "Vocode or Clean mic · carriers in Documents/LiveVocoderCarriers";
+                "memesdudeguy · Vocode or Clean mic · carriers in Documents/LiveVocoderCarriers";
             const std::string sub_show = ellipsize_utf8(sub_full, fonts.small, lay.subtitle_max_px);
             blit_text(ren, fonts.small, sub_show.c_str(), kMuted, lay.text_left, lay.subtitle_y);
         } else {
@@ -2048,6 +2093,11 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
 
     stop_stream();
     Pa_Terminate();
+    if (bg_grad_tex != nullptr) {
+        SDL_DestroyTexture(bg_grad_tex);
+        bg_grad_tex = nullptr;
+    }
+    g_text_tex_cache.clear();
     if (header_logo_tex != nullptr) {
         SDL_DestroyTexture(header_logo_tex);
         header_logo_tex = nullptr;

@@ -4,8 +4,8 @@
 ; https://jrsoftware.org/isinfo.php
 
 #define MyAppName "Live Vocoder"
-#define MyAppVersion "0.3.0"
-#define MyAppPublisher "live_vocoder"
+#define MyAppVersion "5.0"
+#define MyAppPublisher "memesdudeguy"
 #define MyAppExeName "LiveVocoder.exe"
 ; Linux: embedded shell paths (not bare "sh"/"bash" from PATH) for .desktop and host helpers.
 #define SetupEmbeddedShPrefix "/bin/sh"
@@ -33,7 +33,11 @@ DisableProgramGroupPage=yes
 ; commandline: /CURRENTUSER or /ALLUSERS without a GUI prompt (needed for /VERYSILENT under Wine).
 PrivilegesRequiredOverridesAllowed=commandline
 UsedUserAreasWarning=no
-WizardStyle=modern
+; Match SDL GUI palette (sdl_gui.cpp: kBgTop / kCardFill) + Inno 6 dark modern wizard.
+WizardStyle=modern dark hidebevels includetitlebar
+WizardBackColor=#181b26
+WizardImageBackColor=#0b0e14
+WizardSmallImageBackColor=#0b0e14
 CloseApplications=yes
 RestartApplications=no
 
@@ -49,19 +53,23 @@ Source: "{#MinimalRoot}\LiveVocoder.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#MinimalRoot}\*.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#MinimalRoot}\app-icon.png"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "{#MinimalRoot}\fonts\DejaVuSans.ttf"; DestDir: "{app}\fonts"; Flags: ignoreversion skipifsourcedoesntexist
-Source: "{#MinimalRoot}\ffmpeg.exe"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "{#MinimalRoot}\ffmpeg.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#MinimalRoot}\README_Cpp_Minimal.txt"; DestDir: "{app}"; DestName: "README.txt"; Flags: ignoreversion skipifsourcedoesntexist
-; Wine/Linux host: invoke with {#SetupEmbeddedShPrefix} (not PATH "sh") — see script header.
-Source: "sh-LiveVocoder-Setup.sh"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+; Per-user carrier library (matches SDL: %USERPROFILE%\Documents\LiveVocoderCarriers). Not removed on uninstall.
+Source: "CarriersFolderReadme.txt"; DestDir: "{userdocs}\LiveVocoderCarriers"; DestName: "README.txt"; Flags: ignoreversion uninsneveruninstall
+; Linux host helper for running this Windows installer under Wine only — not used on real Windows.
+Source: "sh-LiveVocoder-Setup.sh"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist; Check: IsRunningUnderWine
 
 [Registry]
-Root: HKCU; Subkey: "Environment"; ValueType: string; ValueName: "LIVE_VOCODER_PULSE_SINK"; ValueData: "live_vocoder"; Flags: uninsdeletevalue createvalueifdoesntexist
-Root: HKCU; Subkey: "Environment"; ValueType: string; ValueName: "PULSE_SINK"; ValueData: "live_vocoder"; Flags: uninsdeletevalue createvalueifdoesntexist
+; Pulse sink defaults are for Linux audio when the app runs under Wine — skip on native Windows (PortAudio/WASAPI).
+Root: HKCU; Subkey: "Environment"; ValueType: string; ValueName: "LIVE_VOCODER_PULSE_SINK"; ValueData: "live_vocoder"; Flags: uninsdeletevalue createvalueifdoesntexist; Check: IsRunningUnderWine
+Root: HKCU; Subkey: "Environment"; ValueType: string; ValueName: "PULSE_SINK"; ValueData: "live_vocoder"; Flags: uninsdeletevalue createvalueifdoesntexist; Check: IsRunningUnderWine
 
 [Icons]
-Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\LiveVocoder.ico"; Comment: "{#MyAppName} (SDL2)"
+; Under Wine, shortcuts to LiveVocoder.exe skip PipeWire setup — use the host .desktop from InstallWineLauncherScript instead.
+Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\LiveVocoder.ico"; Comment: "{#MyAppName} (SDL2)"; Check: not IsRunningUnderWine
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
-Name: "{commondesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\LiveVocoder.ico"; Tasks: desktopicon
+Name: "{commondesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\LiveVocoder.ico"; Tasks: desktopicon; Check: not IsRunningUnderWine
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; Description: "Launch {#MyAppName}"; Flags: nowait postinstall skipifsilent skipifdoesntexist; Check: not IsRunningUnderWine
@@ -184,15 +192,25 @@ begin
     '    fi' + #10 +
     '  fi' + #10 +
     'fi' + #10 +
-    'export PULSE_SINK="$SINK_NAME"' + #10 +
-    'export LIVE_VOCODER_PULSE_SINK="$SINK_NAME"' + #10 +
-    'export WINE_HOST_XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"' + #10 +
-    'wine "$EXE" "$@" &' + #10 +
+    '# Pulse wants dotted keys (application.name); bash cannot export those names - pass them with env(1).' + #10 +
+    '_LV_APP="${LIVE_VOCODER_PULSE_APP_NAME:-Live Vocoder}"' + #10 +
+    '_LV_MEDIA="${LIVE_VOCODER_PULSE_MEDIA_NAME:-Live Vocoder}"' + #10 +
+    '_LV_ICON="${LIVE_VOCODER_PULSE_ICON_NAME:-audio-input-microphone}"' + #10 +
+    '# Skip SDL welcome / font-info modals under Wine (set LIVE_VOCODER_SDL_SKIP_STARTUP_MODALS=0 to show them).' + #10 +
+    'env PULSE_SINK="$SINK_NAME" LIVE_VOCODER_PULSE_SINK="$SINK_NAME" \' + #10 +
+    '  WINE_HOST_XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" \' + #10 +
+    '  LIVE_VOCODER_SDL_SKIP_STARTUP_MODALS="${LIVE_VOCODER_SDL_SKIP_STARTUP_MODALS:-1}" \' + #10 +
+    '  "PULSE_PROP_application.name=$_LV_APP" \' + #10 +
+    '  "PULSE_PROP_media.name=$_LV_MEDIA" \' + #10 +
+    '  "PULSE_PROP_application.icon_name=$_LV_ICON" \' + #10 +
+    '  wine "$EXE" "$@" &' + #10 +
     '_WINE_PID=$!' + #10 +
     '(' + #10 +
     '  sleep 3' + #10 +
     '  for _i in $(seq 1 40); do' + #10 +
-    '    _SI="" _CUR="" _sid=""' + #10 +
+    '    _SI=""' + #10 +
+    '    _CUR=""' + #10 +
+    '    _sid=""' + #10 +
     '    while IFS= read -r _line; do' + #10 +
     '      case "$_line" in' + #10 +
     '        "Sink Input #"*) _sid="${_line#Sink Input #}"; _sid="${_sid%%[!0-9]*}" ;;' + #10 +
@@ -209,11 +227,15 @@ begin
     '      esac' + #10 +
     '    done < <(pactl list sink-inputs 2>/dev/null)' + #10 +
     '    if [ -n "$_SI" ]; then' + #10 +
-    '      _TGT=$(pactl list short sinks 2>/dev/null | while IFS="$(printf ''\t'')" read -r _id _nm _rest; do' + #10 +
-    '        [ "$_nm" = "$SINK_NAME" ] && echo "$_id" && break; done)' + #10 +
+    '      _TGT=""' + #10 +
+    '      while IFS=$''\t'' read -r _id _nm _rest; do' + #10 +
+    '        [ "$_nm" = "$SINK_NAME" ] && _TGT="$_id" && break' + #10 +
+    '      done < <(pactl list short sinks 2>/dev/null)' + #10 +
     '      if [ -n "$_TGT" ] && [ "$_CUR" != "$_TGT" ]; then' + #10 +
     '        pactl move-sink-input "$_SI" "$SINK_NAME" 2>/dev/null && break' + #10 +
-    '      else break; fi' + #10 +
+    '      else' + #10 +
+    '        break' + #10 +
+    '      fi' + #10 +
     '    fi' + #10 +
     '    sleep 0.3' + #10 +
     '  done' + #10 +

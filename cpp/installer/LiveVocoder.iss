@@ -12,8 +12,8 @@
 ; https://jrsoftware.org/isinfo.php
 
 #define MyAppName "LiveVocoder"
-#define MyAppVersion "0.3.0"
-#define MyAppPublisher "live_vocoder"
+#define MyAppVersion "5.0"
+#define MyAppPublisher "memesdudeguy"
 #define MyAppExeName "LiveVocoder.exe"
 
 #ifexist "..\dist-windows-cross\LiveVocoder.exe"

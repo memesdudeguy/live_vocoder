@@ -6,13 +6,21 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 DIR="$ROOT/dist-windows-cross"
+
 EXE="$DIR/LiveVocoder.exe"
 if [[ ! -f "$EXE" ]]; then
   echo "Missing $EXE — build and bundle first." >&2
   exit 1
 fi
 cd "$DIR"
+_pulse_env() {
+  exec env \
+    "PULSE_PROP_application.name=${LIVE_VOCODER_PULSE_APP_NAME:-Live Vocoder}" \
+    "PULSE_PROP_media.name=${LIVE_VOCODER_PULSE_MEDIA_NAME:-Live Vocoder}" \
+    "PULSE_PROP_application.icon_name=${LIVE_VOCODER_PULSE_ICON_NAME:-audio-input-microphone}" \
+    "$@"
+}
 if command -v wine64 >/dev/null 2>&1; then
-  exec wine64 "./LiveVocoder.exe" "$@"
+  _pulse_env wine64 "./LiveVocoder.exe" "$@"
 fi
-exec wine "./LiveVocoder.exe" "$@"
+_pulse_env wine "./LiveVocoder.exe" "$@"

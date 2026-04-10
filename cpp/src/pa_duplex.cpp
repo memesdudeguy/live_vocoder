@@ -117,7 +117,7 @@ static bool pa_output_name_is_virt_sink_discord_route(const char* name) {
     if (name == nullptr || name[0] == '\0') {
         return false;
     }
-    if (lv_ci_hay_contains(name, "live_vocoder")) {
+    if (lv_ci_hay_contains(name, "live_vocoder") || lv_ci_hay_contains(name, "livevocoder")) {
         return true;
     }
     if (lv_ci_hay_contains(name, "null") && lv_ci_hay_contains(name, "output")) {
@@ -172,7 +172,7 @@ static bool lv_input_name_looks_virtual(const char* name) {
     }
     return lv_ci_hay_contains(name, "monitor") || lv_ci_hay_contains(name, "_mic") ||
            lv_ci_hay_contains(name, "virtual") || lv_ci_hay_contains(name, "remap") ||
-           lv_ci_hay_contains(name, "live_vocoder");
+           lv_ci_hay_contains(name, "live_vocoder") || lv_ci_hay_contains(name, "livevocoder");
 }
 
 static PaHostApiIndex lv_find_pulse_host_api() {

@@ -1,5 +1,6 @@
 /**
  * Main executable: SDL2 + PortAudio vocoder GUI by default (no GTK/Tk/web/Python GUI from this binary).
+ * Author: memesdudeguy.
  * Optional headless path: --minimal-cpp carrier [sample_rate]  (any audio ffmpeg reads, or raw .f32)
  *
  *   ./LiveVocoder.exe --minimal-cpp song.mp3

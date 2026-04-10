@@ -87,11 +87,22 @@ if [[ -f "${SRC}/ffmpeg.exe" ]]; then
   cp -f "${SRC}/ffmpeg.exe" "${DST}/"
 fi
 
-cat >"${DST}/README_Cpp_Minimal.txt" <<'EOF'
+if [[ ! -f "${DST}/ffmpeg.exe" ]]; then
+  echo "bundle-installer-minimal: ffmpeg.exe is required next to LiveVocoder.exe for the Windows installer (carrier conversion)." >&2
+  echo "  Copy ffmpeg.exe into ${SRC}/ or install MinGW ffmpeg and re-bundle. On Arch cross-build, place ffmpeg.exe in dist-windows-cross/." >&2
+  exit 1
+fi
+
+if [[ -f "${ROOT}/installer/README_Cpp_Minimal.txt" ]]; then
+  cp -f "${ROOT}/installer/README_Cpp_Minimal.txt" "${DST}/README_Cpp_Minimal.txt"
+else
+  cat >"${DST}/README_Cpp_Minimal.txt" <<'EOF'
 Live Vocoder — C++ SDL build (this installer)
 
 Included: LiveVocoder.exe, MinGW/Pulse/SDL runtime DLLs, optional DejaVu font and ffmpeg.
 
+• Carriers folder: Windows Documents\LiveVocoderCarriers (shell path; same as setup’s userdocs; created by setup and on first run).
+  A README.txt is placed there during install. Drop audio onto the app window to convert to .f32 here.
 • Carrier files: non-.f32 formats need ffmpeg.exe next to the app or ffmpeg on PATH.
 • Text UI: Windows uses Segoe UI / Arial if fonts\DejaVuSans.ttf is missing.
 
@@ -107,6 +118,7 @@ Wine on Linux: on startup the Windows .exe detects Wine (ntdll wine_get_version)
 
 Full Python/GTK/web bundle: use the standard LiveVocoder_Setup_*.exe (larger) from the same project.
 EOF
+fi
 
 echo "Minimal installer payload: ${DST}/"
 ls -la "${DST}"

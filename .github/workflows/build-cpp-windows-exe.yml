@@ -1,8 +1,20 @@
 # Native C++ vocoder: Windows PE .exe + MinGW DLLs (same folder runs on Windows and under Wine).
+# Artifacts (AppVersion 5.0 from installer scripts):
+#   - LiveVocoder-full-setup-v5.0 — full portable + Python (LiveVocoder_Setup_5.0.exe)
+#   - LiveVocoder-Cpp-setup-v5.0 — SDL-only minimal installer (LiveVocoder-Setup.exe)
+#
+# Publish a GitHub Release (uploads both .exe): create and push a version tag, e.g.
+#   git tag v5.0 && git push origin v5.0
 name: Build C++ Windows EXE
 
 on:
   workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
 
 jobs:
   mingw64:
@@ -24,6 +36,7 @@ jobs:
             mingw-w64-x86_64-SDL2
             mingw-w64-x86_64-SDL2_ttf
             mingw-w64-x86_64-ttf-dejavu
+            mingw-w64-x86_64-ffmpeg
             unzip
 
       - name: Configure & build
@@ -50,7 +63,7 @@ jobs:
           cp -a cpp/dist-windows/. cpp/dist-windows-cross/
           cd cpp && bash bundle-dist-windows-cross-python.sh
 
-      - name: Install Inno Setup and build installer .exe
+      - name: Install Inno Setup and build full installer .exe
         shell: powershell
         run: |
           choco install innosetup -y --no-progress
@@ -61,14 +74,69 @@ jobs:
           if (-not (Test-Path $iscc)) { throw "ISCC.exe not found after choco install innosetup" }
           & $iscc "$env:GITHUB_WORKSPACE\cpp\installer\LiveVocoder.iss"
 
+      - name: Minimal SDL installer payload + LiveVocoder-Setup.exe (5.0)
+        shell: msys2 {0}
+        run: |
+          set -euo pipefail
+          cp -f /mingw64/bin/ffmpeg.exe "$GITHUB_WORKSPACE/cpp/dist-windows/ffmpeg.exe"
+          export LV_MINIMAL_EXE="$GITHUB_WORKSPACE/cpp/dist-windows/LiveVocoder.exe"
+          cd "$GITHUB_WORKSPACE/cpp"
+          bash bundle-installer-minimal.sh
+
+      - name: Compile minimal Inno installer (LiveVocoder-Setup.exe)
+        shell: powershell
+        run: |
+          $iscc = Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            $iscc = Join-Path $env:ProgramFiles "Inno Setup 6\ISCC.exe"
+          }
+          if (-not (Test-Path $iscc)) { throw "ISCC.exe not found for minimal installer" }
+          & $iscc "$env:GITHUB_WORKSPACE\cpp\installer\LiveVocoderCppMinimal.iss"
+
       - name: Upload portable folder (exe + DLLs + Python for Wine / Windows)
         uses: actions/upload-artifact@v4
         with:
-          name: LiveVocoder-windows
+          name: LiveVocoder-windows-v5.0
           path: cpp/dist-windows-cross/
 
-      - name: Upload Inno Setup installer
+      - name: Upload full Inno Setup installer (5.0)
         uses: actions/upload-artifact@v4
         with:
-          name: LiveVocoder-setup
-          path: cpp/dist-installer/*.exe
+          name: LiveVocoder-full-setup-v5.0
+          path: cpp/dist-installer/LiveVocoder_Setup_*.exe
+
+      - name: Upload minimal C++ installer (5.0)
+        uses: actions/upload-artifact@v4
+        with:
+          name: LiveVocoder-Cpp-setup-v5.0
+          path: cpp/dist-installer/LiveVocoder-Setup.exe
+
+  release:
+    name: Publish GitHub Release (tag builds only)
+    needs: mingw64
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download full installer artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: LiveVocoder-full-setup-v5.0
+          path: release-assets
+
+      - name: Download minimal C++ installer artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: LiveVocoder-Cpp-setup-v5.0
+          path: release-assets
+
+      - name: Create GitHub Release with installers
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Live Vocoder ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            release-assets/LiveVocoder_Setup_*.exe
+            release-assets/LiveVocoder-Setup.exe

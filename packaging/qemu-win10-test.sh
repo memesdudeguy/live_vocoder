@@ -2,7 +2,7 @@
 # Launch Windows 10 in QEMU for testing LiveVocoder (installer + exe).
 #
 # Prerequisites (Arch Linux examples):
-#   sudo pacman -S qemu-system-x86_64 edk2-ovmf samba   # samba = QEMU user-mode SMB share
+#   sudo pacman -S qemu-system-x86 edk2-ovmf samba   # samba = QEMU user-mode SMB share (Arch package rename)
 #
 # First-time Windows install: put official Win10 x64 ISO on disk, then e.g.
 #   WIN10_ISO=~/Downloads/Win10_22H2.iso ./qemu-win10-test.sh ~/VMs/win10.qcow2
@@ -23,7 +23,7 @@ LV_SHARE_DIR="${LV_SHARE_DIR:-$DEFAULT_SHARE}"
 
 QEMU="${QEMU:-qemu-system-x86_64}"
 if ! command -v "$QEMU" >/dev/null 2>&1; then
-  echo "error: $QEMU not found. Install e.g.  sudo pacman -S qemu-system-x86_64" >&2
+  echo "error: $QEMU not found. Install e.g.  sudo pacman -S qemu-system-x86 (or qemu-desktop)" >&2
   exit 1
 fi
 
@@ -75,10 +75,12 @@ ARGS=(
   -display "${QEMU_DISPLAY:-gtk,zoom-to-fit=on}"
 )
 
-# UEFI (recommended for Win10). Arch: /usr/share/edk2-ovmf/x64/OVMF_CODE.fd
+# UEFI. Arch 2025+: /usr/share/edk2/x64/OVMF_CODE.4m.fd (older: edk2-ovmf/x64/OVMF_CODE.fd)
 OVMF_CODE="${OVMF_CODE:-}"
 OVMF_VARS="${OVMF_VARS:-}"
 for cand in \
+  /usr/share/edk2/x64/OVMF_CODE.4m.fd \
+  /usr/share/edk2-ovmf/x64/OVMF_CODE.4m.fd \
   /usr/share/edk2-ovmf/x64/OVMF_CODE.fd \
   /usr/share/OVMF/OVMF_CODE.fd \
   /usr/share/qemu/edk2-x86_64-code.fd; do
@@ -90,6 +92,8 @@ done
 if [[ -n "$OVMF_CODE" ]]; then
   VARS_TEMPLATE=""
   for cand in \
+    /usr/share/edk2/x64/OVMF_VARS.4m.fd \
+    /usr/share/edk2-ovmf/x64/OVMF_VARS.4m.fd \
     /usr/share/edk2-ovmf/x64/OVMF_VARS.fd \
     /usr/share/OVMF/OVMF_VARS.fd \
     /usr/share/qemu/edk2-x86_64-vars.fd; do

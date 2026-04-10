@@ -1,6 +1,8 @@
 C++ executable (SDL2 GUI) + optional Python app
 ==============================================
 
+Made by memesdudeguy.
+
 **Optional:** edit the same C++ sources under ``src/cpp/src`` (minimal tree under repo ``src/``), then
 sync into ``cpp/src`` (e.g. ``rsync -a src/cpp/src/ cpp/src/``) before Windows bundles / CI.
 

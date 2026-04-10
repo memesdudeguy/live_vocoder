@@ -41,6 +41,16 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 cd "$ROOT"
 
+# PipeWire / qpwgraph: Pulse expects dotted keys (PULSE_PROP_application.name). Bash cannot export
+# names with dots; pass them via env(1) so streams are not labeled "LiveVocoder.exe [audio stream…]".
+lv_exec_wine() {
+  exec env \
+    "PULSE_PROP_application.name=${LIVE_VOCODER_PULSE_APP_NAME:-Live Vocoder}" \
+    "PULSE_PROP_media.name=${LIVE_VOCODER_PULSE_MEDIA_NAME:-Live Vocoder}" \
+    "PULSE_PROP_application.icon_name=${LIVE_VOCODER_PULSE_ICON_NAME:-audio-input-microphone}" \
+    "$@"
+}
+
 # Host folder = Python carrier_library + SDL dropped .f32 (GTK and C++ agree).
 link_wine_documents_livevocoder() {
   local host="${HOME}/Documents/LiveVocoderCarriers"
@@ -85,12 +95,12 @@ LIN_LAUNCHER="$ROOT/dist/RunLiveVocoder"
 
 if command -v wine >/dev/null 2>&1 && [[ -f "$WIN_FULL" ]]; then
   link_wine_documents_livevocoder
-  exec wine "$WIN_FULL" "$@"
+  lv_exec_wine wine "$WIN_FULL" "$@"
 fi
 
 if command -v wine >/dev/null 2>&1 && [[ -f "$WIN_LAUNCHER" ]]; then
   link_wine_documents_livevocoder
-  exec wine "$WIN_LAUNCHER" "$@"
+  lv_exec_wine wine "$WIN_LAUNCHER" "$@"
 fi
 
 if command -v wine >/dev/null 2>&1; then
@@ -101,9 +111,9 @@ if command -v wine >/dev/null 2>&1; then
         cd "$_cppdir"
         link_wine_documents_livevocoder
         if command -v wine64 >/dev/null 2>&1; then
-          exec wine64 "./$_name" "$@"
+          lv_exec_wine wine64 "./$_name" "$@"
         fi
-        exec wine "./$_name" "$@"
+        lv_exec_wine wine "./$_name" "$@"
       fi
     done
   done

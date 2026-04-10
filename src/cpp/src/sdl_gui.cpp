@@ -334,6 +334,7 @@ void set_title(SDL_Window* w, const std::string& carrier_label, bool streaming, 
         t += "carrier idle · ";
     }
     t += carrier_label.empty() ? "no carrier" : carrier_label;
+    t += " · memesdudeguy";
     SDL_SetWindowTitle(w, t.c_str());
 }
 
@@ -1220,9 +1221,8 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
                     if (sdl_skip_startup_modals()) {
                         std::fprintf(stderr, "Live Vocoder: ffmpeg carrier conversion failed: %s\n", conv_err.c_str());
                     } else {
-                        sdl_show_themed_message_box(SDL_MESSAGEBOX_WARNING, "Live Vocoder",
-                                                 ("Could not convert startup carrier with ffmpeg (install ffmpeg, PATH):\n" +
-                                                  conv_err)
+                        sdl_show_themed_message_box(SDL_MESSAGEBOX_WARNING, "Live Vocoder — carrier conversion",
+                                                 ("Could not convert startup carrier (see README.txt):\n\n" + conv_err)
                                                      .c_str(),
                                                  window);
                     }
@@ -1257,7 +1257,7 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
                         "Or click Library… in the voice card to choose a file already in that folder.\n"
                         "Or place carrier.f32 there / next to the app. Needs ffmpeg on PATH for non-.f32.\n"
                         "Clean mic needs no carrier.\n\n") +
-            kMonitorHelp;
+            kMonitorHelp + "\n\n— memesdudeguy";
         if (!sdl_skip_startup_modals()) {
             sdl_show_themed_message_box(SDL_MESSAGEBOX_INFORMATION, "Live Vocoder", welcome.c_str(), window);
         }
@@ -1267,7 +1267,8 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
                 SDL_MESSAGEBOX_WARNING, "Live Vocoder",
                 "No UI font found. Install fonts/DejaVuSans.ttf next to the executable (see README), "
                 "or use Segoe UI on Windows.\n\n"
-                "Controls still work: header Start / Stop / Quit; drop audio or .f32 (saved under LiveVocoderCarriers).",
+                "Controls still work: header Start / Stop / Quit; drop audio or .f32 (saved under LiveVocoderCarriers).\n\n"
+                "— memesdudeguy",
                 window);
         } else {
             std::fprintf(stderr, "Live Vocoder: no UI font; place fonts/DejaVuSans.ttf next to the executable.\n");
@@ -1507,8 +1508,8 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
             const std::filesystem::path dest = lib / (stem.string() + ".f32");
             std::string conv_err;
             if (!carrier_ffmpeg_to_f32(lv_gui::kSampleRate, cp, dest, conv_err)) {
-                sdl_show_themed_message_box(SDL_MESSAGEBOX_ERROR, "ffmpeg",
-                                         ("Could not convert carrier to f32 (install ffmpeg, PATH):\n" + conv_err)
+                sdl_show_themed_message_box(SDL_MESSAGEBOX_ERROR, "Live Vocoder — carrier conversion",
+                                         ("Could not convert to .f32 (see README.txt next to the app):\n\n" + conv_err)
                                              .c_str(),
                                          window);
                 return false;
@@ -1743,7 +1744,8 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
                                              "Under Wine on Linux, the stream appears on the host as a normal Pulse/PipeWire "
                                              "client — use your desktop’s audio tools to route or monitor it.\n"
                                              "While streaming, Mic in / Output meters show levels.\n"
-                                             "Press F9 for a short test beep on the output path.",
+                                             "Press F9 for a short test beep on the output path.\n\n"
+                                             "— memesdudeguy",
                                              window);
 #else
                     sdl_show_themed_message_box(SDL_MESSAGEBOX_INFORMATION, "Live Vocoder — Help",
@@ -1765,7 +1767,8 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
                                              "LIVE_VOCODER_PA_LIST_DEVICES=1 to pick devices. The status line summarizes "
                                              "PipeWire when pactl is available.\n"
                                              "While streaming, press F9 for a short test beep on the output path (virtual "
-                                             "sink / monitor).",
+                                             "sink / monitor).\n\n"
+                                             "— memesdudeguy",
                                              window);
 #endif
                 } else {
@@ -1848,7 +1851,7 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
             const std::string title_show = ellipsize_utf8(std::string("Live Vocoder"), fonts.brand, lay.title_max_px);
             blit_text(ren, fonts.brand, title_show.c_str(), kBrand, lay.text_left, lay.title_y);
             const std::string sub_full =
-                "Vocode or Clean mic · carriers in Documents/LiveVocoderCarriers";
+                "memesdudeguy · Vocode or Clean mic · carriers in Documents/LiveVocoderCarriers";
             const std::string sub_show = ellipsize_utf8(sub_full, fonts.small, lay.subtitle_max_px);
             blit_text(ren, fonts.small, sub_show.c_str(), kMuted, lay.text_left, lay.subtitle_y);
         } else {

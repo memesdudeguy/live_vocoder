@@ -4,8 +4,8 @@
 ; https://jrsoftware.org/isinfo.php
 
 #define MyAppName "Live Vocoder"
-#define MyAppVersion "0.3.0"
-#define MyAppPublisher "live_vocoder"
+#define MyAppVersion "5.0"
+#define MyAppPublisher "memesdudeguy"
 #define MyAppExeName "LiveVocoder.exe"
 ; Linux: embedded shell paths (not bare "sh"/"bash" from PATH) for .desktop and host helpers.
 #define SetupEmbeddedShPrefix "/bin/sh"
@@ -53,19 +53,23 @@ Source: "{#MinimalRoot}\LiveVocoder.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#MinimalRoot}\*.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#MinimalRoot}\app-icon.png"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "{#MinimalRoot}\fonts\DejaVuSans.ttf"; DestDir: "{app}\fonts"; Flags: ignoreversion skipifsourcedoesntexist
-Source: "{#MinimalRoot}\ffmpeg.exe"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "{#MinimalRoot}\ffmpeg.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#MinimalRoot}\README_Cpp_Minimal.txt"; DestDir: "{app}"; DestName: "README.txt"; Flags: ignoreversion skipifsourcedoesntexist
-; Wine/Linux host: invoke with {#SetupEmbeddedShPrefix} (not PATH "sh") — see script header.
-Source: "sh-LiveVocoder-Setup.sh"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+; Per-user carrier library (matches SDL: %USERPROFILE%\Documents\LiveVocoderCarriers). Not removed on uninstall.
+Source: "CarriersFolderReadme.txt"; DestDir: "{userdocs}\LiveVocoderCarriers"; DestName: "README.txt"; Flags: ignoreversion uninsneveruninstall
+; Linux host helper for running this Windows installer under Wine only — not used on real Windows.
+Source: "sh-LiveVocoder-Setup.sh"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist; Check: IsRunningUnderWine
 
 [Registry]
-Root: HKCU; Subkey: "Environment"; ValueType: string; ValueName: "LIVE_VOCODER_PULSE_SINK"; ValueData: "live_vocoder"; Flags: uninsdeletevalue createvalueifdoesntexist
-Root: HKCU; Subkey: "Environment"; ValueType: string; ValueName: "PULSE_SINK"; ValueData: "live_vocoder"; Flags: uninsdeletevalue createvalueifdoesntexist
+; Pulse sink defaults are for Linux audio when the app runs under Wine — skip on native Windows (PortAudio/WASAPI).
+Root: HKCU; Subkey: "Environment"; ValueType: string; ValueName: "LIVE_VOCODER_PULSE_SINK"; ValueData: "live_vocoder"; Flags: uninsdeletevalue createvalueifdoesntexist; Check: IsRunningUnderWine
+Root: HKCU; Subkey: "Environment"; ValueType: string; ValueName: "PULSE_SINK"; ValueData: "live_vocoder"; Flags: uninsdeletevalue createvalueifdoesntexist; Check: IsRunningUnderWine
 
 [Icons]
-Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\LiveVocoder.ico"; Comment: "{#MyAppName} (SDL2)"
+; Under Wine, shortcuts to LiveVocoder.exe skip PipeWire setup — use the host .desktop from InstallWineLauncherScript instead.
+Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\LiveVocoder.ico"; Comment: "{#MyAppName} (SDL2)"; Check: not IsRunningUnderWine
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
-Name: "{commondesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\LiveVocoder.ico"; Tasks: desktopicon
+Name: "{commondesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\LiveVocoder.ico"; Tasks: desktopicon; Check: not IsRunningUnderWine
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; Description: "Launch {#MyAppName}"; Flags: nowait postinstall skipifsilent skipifdoesntexist; Check: not IsRunningUnderWine
@@ -188,7 +192,7 @@ begin
     '    fi' + #10 +
     '  fi' + #10 +
     'fi' + #10 +
-    '# Pulse wants dotted keys (application.name); bash cannot export those names — pass them with env(1).' + #10 +
+    '# Pulse wants dotted keys (application.name); bash cannot export those names - pass them with env(1).' + #10 +
     '_LV_APP="${LIVE_VOCODER_PULSE_APP_NAME:-Live Vocoder}"' + #10 +
     '_LV_MEDIA="${LIVE_VOCODER_PULSE_MEDIA_NAME:-Live Vocoder}"' + #10 +
     '_LV_ICON="${LIVE_VOCODER_PULSE_ICON_NAME:-audio-input-microphone}"' + #10 +

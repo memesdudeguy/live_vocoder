@@ -48,6 +48,12 @@ void lv_linux_wine_move_livevocoder_sink_input_to_pulse_sink(const char* pulse_s
  */
 void lv_linux_wine_move_livevocoder_sink_input_after_pa_start();
 
+/**
+ * Native Linux: after ``Pa_StartStream``, move this app's sink-input to ``PULSE_SINK`` / ``live_vocoder*`` when needed.
+ * Some PortAudio + Pulse backends ignore the env for routing; this mirrors the Wine post-start ``pactl`` fix.
+ */
+void lv_linux_move_livevocoder_sink_input_after_pa_start();
+
 /** Wine on Linux: sync host PipeWire mute vs Monitor (full impl in LiveVocoder tree; stub here). */
 void lv_win32_wine_pulse_sync_monitor_mute(bool streaming, bool monitor_on, bool virt_output);
 
