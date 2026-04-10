@@ -81,6 +81,24 @@ static bool carrier_win32_running_under_wine() {
     return false;
 }
 
+/**
+ * Wine-specific FFmpeg troubleshooting (paths, /usr/bin/ffmpeg, etc.).
+ * Stricter than ``carrier_win32_running_under_wine()`` so real Windows never sees Wine-only hints
+ * if ``wine_get_version`` were ever visible without a full Wine runtime.
+ */
+static bool carrier_win32_ffmpeg_hints_use_wine() {
+    if (GetModuleHandleW(L"winecrt0.dll") != nullptr) {
+        return true;
+    }
+    HMODULE ntdll = GetModuleHandleW(L"ntdll.dll");
+    if (ntdll == nullptr || GetProcAddress(ntdll, "wine_get_version") == nullptr) {
+        return false;
+    }
+    wchar_t wp[4];
+    const DWORD n = GetEnvironmentVariableW(L"WINEPREFIX", wp, static_cast<DWORD>(sizeof(wp) / sizeof(wp[0])));
+    return n > 0;
+}
+
 std::filesystem::path carrier_win32_localize_path_for_filesystem(const std::filesystem::path& raw) {
     std::string g = raw.generic_string();
     if (g.compare(0, 7, "file://") == 0) {
@@ -227,6 +245,49 @@ static std::string slurp_text_file_trunc(const std::filesystem::path& path, std:
     return s;
 }
 
+/** CMD ``2>`` redirection is more reliable when the path is short/ASCII (8.3 if Windows provides it). */
+static std::filesystem::path carrier_win32_short_path_for_cmd_redir(const std::filesystem::path& p) {
+    std::wstring w = p.wstring();
+    DWORD need = GetShortPathNameW(w.c_str(), nullptr, 0);
+    if (need == 0) {
+        return p;
+    }
+    std::vector<wchar_t> buf(need);
+    DWORD n = GetShortPathNameW(w.c_str(), buf.data(), need);
+    if (n == 0 || n >= need) {
+        return p;
+    }
+    return std::filesystem::path(std::wstring(buf.data(), n));
+}
+
+static void carrier_win32_err_ffmpeg_not_run(std::string& err_out) {
+    err_out =
+        "could not run ffmpeg.exe. On Windows put ffmpeg.exe next to LiveVocoder.exe (installer does this), "
+        "or add ffmpeg to PATH, or set LIVE_VOCODER_FFMPEG to the full path. ";
+    if (carrier_win32_ffmpeg_hints_use_wine()) {
+        err_out += "Under Wine on Linux you cannot use the host /usr/bin/ffmpeg — use Windows ffmpeg.exe. ";
+    }
+    err_out += "You can also use a pre-made .f32 carrier.";
+}
+
+/** When stderr capture is empty: native Windows gets accurate hints; Wine keeps the old wording. */
+static void carrier_win32_err_ffmpeg_failed_no_stderr(std::string& err_out) {
+    if (carrier_win32_ffmpeg_hints_use_wine()) {
+        err_out +=
+            " — unsupported format, unreadable path under Wine, or missing codec in ffmpeg.exe. "
+            "Fix: put ffmpeg.exe next to LiveVocoder.exe (or set LIVE_VOCODER_FFMPEG), use Library… "
+            "inside the app, or pre-convert on the host: "
+            "ffmpeg -y -i track.wav -f f32le -ac 1 -ar 48000 carrier.f32 then drop the .f32.";
+        return;
+    }
+    err_out +=
+        " — unsupported format, DRM-protected media, or this ffmpeg.exe build is missing the decoder "
+        "(try a full Windows build from gyan.dev or BtbN GitHub releases). "
+        "The carriers folder existing only means ffmpeg can write the .f32 there; decoding still happens inside ffmpeg. "
+        "Fix: set LIVE_VOCODER_FFMPEG to a fuller ffmpeg.exe, use WAV/FLAC, or pre-convert to .f32: "
+        "ffmpeg -y -i track.wav -f f32le -ac 1 -ar 48000 carrier.f32.";
+}
+
 #endif
 
 static bool carrier_extension_is_convertible_audio(const std::filesystem::path& path) {
@@ -358,6 +419,7 @@ bool carrier_ffmpeg_to_f32(int sample_rate, const std::filesystem::path& src,
     } else {
         err_log = std::filesystem::temp_directory_path(ec_tmp) / "lvoc_ff.txt";
     }
+    err_log = carrier_win32_short_path_for_cmd_redir(err_log);
     const std::string err_redir_target = ffmpeg_path_arg_windows(err_log);
 
     int exit_code = -999;
@@ -366,8 +428,8 @@ bool carrier_ffmpeg_to_f32(int sample_rate, const std::filesystem::path& src,
             continue;
         }
         std::filesystem::remove(err_log, ec_tmp);
-        // warning (not error-only): ffmpeg often explains exit 1 on stderr; we still hide noisy banner.
-        const std::string cmd = quote_cmd_exe_arg(ffmpeg_exe) + " -y -nostdin -hide_banner -loglevel warning -i " +
+        // ``info`` captures decode/codec lines that ``warning`` sometimes omits (native Windows).
+        const std::string cmd = quote_cmd_exe_arg(ffmpeg_exe) + " -y -nostdin -hide_banner -loglevel info -i " +
                                 quote_cmd_exe_arg(src_s) + " -f f32le -ac 1 -ar " + ar_s + " " +
                                 quote_cmd_exe_arg(dst_s) + " 2>" + quote_cmd_exe_arg(err_redir_target);
         const int r = std::system(cmd.c_str());
@@ -382,11 +444,7 @@ bool carrier_ffmpeg_to_f32(int sample_rate, const std::filesystem::path& src,
         exit_code = ex;
     }
     if (exit_code == -999) {
-        err_out =
-            "could not run ffmpeg.exe. On Windows put ffmpeg.exe next to LiveVocoder.exe (installer does this), "
-            "or add ffmpeg to PATH, or set LIVE_VOCODER_FFMPEG to the full path. "
-            "Under Wine on Linux you cannot use the host /usr/bin/ffmpeg — use Windows ffmpeg.exe. "
-            "You can also use a pre-made .f32 carrier.";
+        carrier_win32_err_ffmpeg_not_run(err_out);
         return false;
     }
     if (exit_code != 0) {
@@ -395,12 +453,13 @@ bool carrier_ffmpeg_to_f32(int sample_rate, const std::filesystem::path& src,
         if (!detail.empty()) {
             err_out += ":\n";
             err_out += detail;
+            if (!carrier_win32_ffmpeg_hints_use_wine()) {
+                err_out +=
+                    "\n\n(Native Windows) If conversion still fails: use a full ffmpeg build with your codecs, "
+                    "or set LIVE_VOCODER_FFMPEG. Files on OneDrive can confuse some tools — try a copy in a local folder.";
+            }
         } else {
-            err_out +=
-                " — unsupported format, unreadable path under Wine, or missing codec in ffmpeg.exe. "
-                "Fix: put ffmpeg.exe next to LiveVocoder.exe (or set LIVE_VOCODER_FFMPEG), use Library… "
-                "inside the app, or pre-convert on the host: "
-                "ffmpeg -y -i track.wav -f f32le -ac 1 -ar 48000 carrier.f32 then drop the .f32.";
+            carrier_win32_err_ffmpeg_failed_no_stderr(err_out);
         }
         std::filesystem::remove(err_log, ec_tmp);
         return false;
