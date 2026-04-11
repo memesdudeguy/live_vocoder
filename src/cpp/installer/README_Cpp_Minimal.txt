@@ -27,7 +27,8 @@ or from https://vb-audio.com/Cable/ ) before ``bundle-installer-minimal.sh``. VB
 The bundled ``VBCABLE_Setup_x64.exe`` is started from Pascal via **ShellExec('runas', …)** after file
 install (not the ``[Run]`` list, which used ``CreateProcess`` and could fail with error 740). Silent
 args ``-i -h -H -n``; UAC still appears for the driver. Fully unattended installs may need a
-trusted-publisher certificate (VB-Audio / Microsoft docs).
+trusted-publisher certificate (VB-Audio / Microsoft docs). **Note:** after ``runas``, Windows often
+does not report the child process exit code to the parent; ``-1`` is not a reliable “failure” signal.
 
 **If OBS has no “CABLE Input / Output” after the checkbox:** You must approve **UAC** and any **Windows
 Security** “install driver” prompts for the elevated VB-Cable window. If unsure it succeeded, open

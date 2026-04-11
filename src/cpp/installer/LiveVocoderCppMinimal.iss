@@ -354,8 +354,10 @@ begin
       if ShellExec('runas', ExpandConstant('{app}\extras\VBCABLE_Setup_x64.exe'), '-i -h -H -n',
            ExpandConstant('{app}\extras'), SW_SHOW, ewWaitUntilTerminated, VbEc) then
       begin
-        { Silent VB-Cable can still fail (driver block, policy); exit code was invisible before. }
-        if (VbEc <> 0) and (not WizardSilent) then
+        { ShellExec(..., 'runas', ...) often leaves ResultCode as -1 even when the elevated child
+          exits normally — Windows does not always propagate the child's exit code back. Only
+          treat positive non-zero codes as a definite VB-Cable failure signal. }
+        if (VbEc > 0) and (not WizardSilent) then
           MsgBox('VB-Audio Virtual Cable setup finished with exit code ' + IntToStr(VbEc) + '.'#13#10 +
                  'If CABLE devices are missing in OBS, approve any driver prompts, then run the installer manually (double-click, no silent flags) from:'#13#10 +
                  ExpandConstant('{app}\extras\VBCABLE_Setup_x64.exe'), mbInformation, MB_OK);
