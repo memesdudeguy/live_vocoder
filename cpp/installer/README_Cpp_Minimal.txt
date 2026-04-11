@@ -24,11 +24,15 @@ that heuristic is off—use ``PULSE_SINK`` / null-sink routing on the Linux host
 ``VBCABLE_Setup_x64.exe`` into release ``LiveVocoder-Setup.exe`` (checked wizard task on native Windows).
 For local builds, place ``VBCABLE_Setup_x64.exe`` in ``cpp/installer/third_party/`` (extract from that zip
 or from https://vb-audio.com/Cable/ ) before ``bundle-installer-minimal.sh``. VB-Audio is donationware.
-The bundled ``VBCABLE_Setup_x64.exe`` is started from Pascal via **ShellExec('runas', …)** after file
-install (not the ``[Run]`` list, which used ``CreateProcess`` and could fail with error 740). Silent
-args ``-i -h -H -n``; UAC still appears for the driver. Fully unattended installs may need a
-trusted-publisher certificate (VB-Audio / Microsoft docs). **Note:** after ``runas``, Windows often
-does not report the child process exit code to the parent; ``-1`` is not a reliable “failure” signal.
+The bundled ``VBCABLE_Setup_x64.exe`` runs **after** file install with silent args ``-i -h -H -n`` and
+**``SW_HIDE``** (no VB-Audio wizard window). If the Live Vocoder setup is **already elevated**
+(**``IsAdmin``** — e.g. right-click Run as administrator, or install for all users with UAC), it uses
+**``Exec``** so the driver installer runs in-process as admin and exit codes are reliable. If the
+setup is not admin (typical per-user install), it uses **``ShellExec('runas', …)``** — one **UAC**
+prompt, and Windows may still show **driver trust** / SmartScreen dialogs (not suppressible from our
+installer without importing VB-Audio’s publisher certificate). Fully unattended installs may need that
+certificate or MDM policy (VB-Audio / Microsoft docs). **Note:** after ``runas``, the child exit code
+is often ``-1``; only positive codes are treated as definite failure.
 
 **If OBS has no “CABLE Input / Output” after the checkbox:** You must approve **UAC** and any **Windows
 Security** “install driver” prompts for the elevated VB-Cable window. If unsure it succeeded, open
