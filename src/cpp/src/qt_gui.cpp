@@ -5,6 +5,9 @@
 #include "linux_pulse_env.hpp"
 #include "pa_duplex.hpp"
 #include "vocoder.hpp"
+#if defined(_WIN32)
+#include "win_default_virt_mic.hpp"
+#endif
 
 #if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
@@ -315,6 +318,7 @@ public:
         } else {
             pa_initialized_ = true;
             pa_log_all_devices_if_requested(stderr);
+            refreshStatusFoot();
         }
     }
 
@@ -462,13 +466,30 @@ private:
 
     void refreshStatusFoot() {
         QString t;
+#if defined(_WIN32)
+        {
+            const std::string wd = lv_win32_try_set_default_capture_to_vb_cable();
+            if (!wd.empty()) {
+                t = QString::fromStdString(wd);
+            }
+        }
+#endif
         {
             const std::string pl = lv_linux_pulse_virt_mic_status_line();
             const std::string pa = pa_portaudio_virt_capture_hint();
             if (!pl.empty() && !pa.empty()) {
-                t = QString::fromStdString(pl + " · " + pa);
+                if (!t.isEmpty()) {
+                    t += QStringLiteral(" · ");
+                }
+                t += QString::fromStdString(pl + " · " + pa);
             } else {
-                t = QString::fromStdString(!pl.empty() ? pl : pa);
+                const std::string rest = !pl.empty() ? pl : pa;
+                if (!rest.empty()) {
+                    if (!t.isEmpty()) {
+                        t += QStringLiteral(" · ");
+                    }
+                    t += QString::fromStdString(rest);
+                }
             }
         }
 #if defined(_WIN32)

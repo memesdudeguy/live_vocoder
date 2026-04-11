@@ -120,6 +120,8 @@ variables (then restart the app):
   LIVE_VOCODER_PA_INPUT_INDEX   zero-based input index
   LIVE_VOCODER_PA_OUTPUT  substring of the output device name, or
   LIVE_VOCODER_PA_OUTPUT_INDEX  zero-based output index
+  LIVE_VOCODER_WIN_DEFAULT_VIRT_MIC  set to ``0`` to skip setting Windows default recording device to VB-Audio
+  CABLE Output (default: on when VB-Cable is installed; use with ``LIVE_VOCODER_DISABLE_VB_CABLE=1`` to leave defaults alone)
 
 List names once:
   set LIVE_VOCODER_PA_LIST_DEVICES=1

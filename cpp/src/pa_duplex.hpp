@@ -16,7 +16,8 @@ void pa_log_all_devices_if_requested(FILE* out);
  *   else LIVE_VOCODER_PULSE_SINK — substring match on output device name (Linux; after PULSE_SINK env)
  *   else on native Windows (not Wine): VB-Audio Virtual Cable playback (CABLE Input) if installed and
  *        LIVE_VOCODER_PA_OUTPUT / _INDEX unset — disable with LIVE_VOCODER_DISABLE_VB_CABLE=1; if the default
- *        input is CABLE Output, prefers another capture device for the microphone when available
+ *        input is CABLE Output, prefers another capture device for the microphone when available; on startup
+ *        sets Windows default recording device to CABLE Output when present (LIVE_VOCODER_WIN_DEFAULT_VIRT_MIC=0 to skip)
  *   else system default input/output
  * Output device must report at least 2 output channels (stereo).
  */

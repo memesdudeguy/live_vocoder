@@ -35,6 +35,9 @@
 #include "linux_pulse_env.hpp"
 #include "pa_duplex.hpp"
 #include "vocoder.hpp"
+#if defined(_WIN32)
+#include "win_default_virt_mic.hpp"
+#endif
 
 #ifdef LIVE_VOCODER_HAS_SDL2
 #include "sdl_gui.hpp"
@@ -261,6 +264,14 @@ int run_minimal_cpp_vocoder(char* argv0, const char* carrier_path, int sample_ra
         return 1;
     }
     pa_log_all_devices_if_requested(stderr);
+#if defined(_WIN32)
+    {
+        const std::string win_def = lv_win32_try_set_default_capture_to_vb_cable();
+        if (!win_def.empty()) {
+            std::fprintf(stderr, "[LiveVocoder] %s\n", win_def.c_str());
+        }
+    }
+#endif
     {
         const std::string pl = lv_linux_pulse_virt_mic_status_line();
         if (!pl.empty()) {

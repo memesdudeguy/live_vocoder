@@ -712,9 +712,10 @@ std::string pa_windows_virt_mic_route_hint() {
                "auto-routing (CABLE Input/Output) applies on native Windows only, not under Wine. "
                "LIVE_VOCODER_PA_LIST_DEVICES=1 lists devices; or run native Linux LiveVocoder.exe.";
     }
-    return "Native Windows + VB-Audio Virtual Cable: playback auto-selects CABLE Input (vocoder → cable). "
-           "In Discord, OBS, etc. choose CABLE Output as the microphone. Install from vb-audio.com if needed. "
-           "Overrides: LIVE_VOCODER_PA_OUTPUT / LIVE_VOCODER_PA_INPUT / *_INDEX; "
-           "LIVE_VOCODER_DISABLE_VB_CABLE=1 uses normal default devices; LIVE_VOCODER_PA_LIST_DEVICES=1 lists names.";
+    return "Native Windows + VB-Audio Virtual Cable: playback → CABLE Input; on startup we set the system default "
+           "microphone to CABLE Output when the driver is present (Discord/OBS can stay on Default). "
+           "Install from vb-audio.com if needed. Overrides: LIVE_VOCODER_PA_OUTPUT / LIVE_VOCODER_PA_INPUT / *_INDEX; "
+           "LIVE_VOCODER_DISABLE_VB_CABLE=1 or LIVE_VOCODER_WIN_DEFAULT_VIRT_MIC=0 skips auto default-mic; "
+           "LIVE_VOCODER_PA_LIST_DEVICES=1 lists names.";
 #endif
 }

@@ -37,6 +37,9 @@
 #include "linux_pulse_env.hpp"
 #include "pa_duplex.hpp"
 #include "vocoder.hpp"
+#if defined(_WIN32)
+#include "win_default_virt_mic.hpp"
+#endif
 
 #define STBI_ONLY_PNG
 #define STB_IMAGE_IMPLEMENTATION
@@ -1307,13 +1310,30 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
     pa_log_all_devices_if_requested(stderr);
 
     std::string virt_mic_status_foot;
+#if defined(_WIN32)
+    {
+        const std::string win_def = lv_win32_try_set_default_capture_to_vb_cable();
+        if (!win_def.empty()) {
+            virt_mic_status_foot = win_def;
+        }
+    }
+#endif
     {
         const std::string pl = lv_linux_pulse_virt_mic_status_line();
         const std::string pa = pa_portaudio_virt_capture_hint();
         if (!pl.empty() && !pa.empty()) {
-            virt_mic_status_foot = pl + " · " + pa;
+            if (!virt_mic_status_foot.empty()) {
+                virt_mic_status_foot += " · ";
+            }
+            virt_mic_status_foot += pl + " · " + pa;
         } else {
-            virt_mic_status_foot = !pl.empty() ? pl : pa;
+            const std::string rest = !pl.empty() ? pl : pa;
+            if (!rest.empty()) {
+                if (!virt_mic_status_foot.empty()) {
+                    virt_mic_status_foot += " · ";
+                }
+                virt_mic_status_foot += rest;
+            }
         }
     }
 #if defined(_WIN32)
