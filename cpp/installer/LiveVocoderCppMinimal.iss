@@ -14,6 +14,9 @@
 #define SetupEmbeddedShPrefix "/bin/sh"
 #define SetupEmbeddedBashPrefix "/bin/bash"
 #define MinimalRoot "..\dist-windows-installer-minimal"
+#ifexist "..\dist-windows-installer-minimal\extras\VBCABLE_Setup_x64.exe"
+#define VBCableBundled
+#endif
 
 [Setup]
 AppId=com.live_vocoder.LiveVocoder.cpp.sdl.x64
@@ -98,11 +101,7 @@ Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 Name: "{commondesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\LiveVocoder.ico"; Tasks: desktopicon; Check: not IsRunningUnderWine
 
 [Run]
-#ifexist "..\dist-windows-installer-minimal\extras\VBCABLE_Setup_x64.exe"
-; VB-Audio setup needs admin (driver). Verb runas + shellexec avoids CreateProcess error 740 when the main setup is not elevated.
-; Flags: -i install, -h silent UI, -H extra silent, -n no reboot prompt.
-Filename: "{app}\extras\VBCABLE_Setup_x64.exe"; Parameters: "-i -h -H -n"; StatusMsg: "Installing VB-Audio Virtual Cable (UAC may prompt)..."; Description: "Install VB-Audio Virtual Cable"; Verb: runas; Flags: shellexec waituntilterminated postinstall skipifdoesntexist; Tasks: vbcable; Check: not IsRunningUnderWine
-#endif
+; VB-Cable is started from CurStepChanged via ShellExec('runas', ...) — [Run] used CreateProcess and hit error 740.
 Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; Description: "Launch {#MyAppName}"; Flags: nowait postinstall skipifsilent skipifdoesntexist; Check: not IsRunningUnderWine
 
 [UninstallDelete]
@@ -331,6 +330,10 @@ begin
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
+#ifdef VBCableBundled
+var
+  VbEc: Integer;
+#endif
 begin
   if CurStep = ssPostInstall then
   begin
@@ -338,7 +341,26 @@ begin
     begin
       SetupPipeWireVirtualMic;
       InstallWineLauncherScript;
-    end;
+    end
+#ifdef VBCableBundled
+    else if WizardIsTaskSelected('vbcable') and
+            FileExists(ExpandConstant('{app}\extras\VBCABLE_Setup_x64.exe')) then
+    begin
+      if not WizardSilent then
+      begin
+        WizardForm.StatusLabel.Caption := 'Installing VB-Audio Virtual Cable (UAC may prompt)...';
+        WizardForm.Update;
+      end;
+      if not ShellExec('runas', ExpandConstant('{app}\extras\VBCABLE_Setup_x64.exe'), '-i -h -H -n',
+           ExpandConstant('{app}\extras'), SW_SHOW, ewWaitUntilTerminated, VbEc) then
+      begin
+        if not WizardSilent then
+          MsgBox('VB-Audio Virtual Cable could not be started (UAC cancelled?). You can run manually:'#13#10 +
+                 ExpandConstant('{app}\extras\VBCABLE_Setup_x64.exe'), mbInformation, MB_OK);
+      end;
+    end
+#endif
+    ;
   end;
 end;
 
