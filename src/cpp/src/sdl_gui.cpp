@@ -1345,6 +1345,13 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
             }
             virt_mic_status_foot += wh;
         }
+        const std::string vb_miss = pa_windows_native_vb_cable_portaudio_hint();
+        if (!vb_miss.empty()) {
+            if (!virt_mic_status_foot.empty()) {
+                virt_mic_status_foot += " · ";
+            }
+            virt_mic_status_foot += vb_miss;
+        }
     }
 #endif
 

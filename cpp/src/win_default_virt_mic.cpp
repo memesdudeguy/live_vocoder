@@ -19,6 +19,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <thread>
 
 // Undocumented Policy Config (Windows Vista+). See DanStevens/AudioEndPointController PolicyConfig.h.
 struct LVDeviceShareMode {
@@ -115,17 +116,48 @@ static bool wstr_contains_ci(const wchar_t* hay, const wchar_t* needle) {
     return false;
 }
 
+static bool wstr_vb_driver_hint(const wchar_t* name) {
+    if (name == nullptr || name[0] == L'\0') {
+        return false;
+    }
+    return wstr_contains_ci(name, L"vb-audio") || wstr_contains_ci(name, L"vb audio") ||
+           wstr_contains_ci(name, L"vbaudio") || wstr_contains_ci(name, L"virtual cable");
+}
+
 static bool friendly_name_is_vb_cable_capture(const wchar_t* name) {
     if (name == nullptr || name[0] == L'\0') {
         return false;
     }
-    if (!wstr_contains_ci(name, L"vb-audio")) {
+    if (!wstr_vb_driver_hint(name)) {
         return false;
     }
     if (!wstr_contains_ci(name, L"output")) {
         return false;
     }
+    if (wstr_contains_ci(name, L"virtual cable") && wstr_contains_ci(name, L"output")) {
+        return true;
+    }
     return wstr_contains_ci(name, L"cable");
+}
+
+static bool property_store_matches_vb_cable_capture(IPropertyStore* ps) {
+    if (ps == nullptr) {
+        return false;
+    }
+    static const PROPERTYKEY kKeys[] = {PKEY_Device_FriendlyName, PKEY_Device_DeviceDesc};
+    for (const PROPERTYKEY& key : kKeys) {
+        PROPVARIANT pv;
+        PropVariantInit(&pv);
+        bool ok = false;
+        if (SUCCEEDED(ps->GetValue(key, &pv)) && pv.vt == VT_LPWSTR && pv.pwszVal != nullptr) {
+            ok = friendly_name_is_vb_cable_capture(pv.pwszVal);
+        }
+        PropVariantClear(&pv);
+        if (ok) {
+            return true;
+        }
+    }
+    return false;
 }
 
 static HRESULT set_default_capture_roles(ILVPolicyConfigWin7* pc, PCWSTR id) {
@@ -167,128 +199,142 @@ std::string lv_win32_try_set_default_capture_to_vb_cable() {
         return cached;
     }
 
-    HRESULT coinit = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
-    if (FAILED(coinit) && coinit != static_cast<HRESULT>(0x80010106)) {  // RPC_E_CHANGED_MODE
-        return cached;
-    }
-    const bool coinit_done = SUCCEEDED(coinit);
+    // SDL / PortAudio often initialize COM in MTA on the main thread; Policy Config is reliable from a fresh STA.
+    std::string built;
+    std::thread([&built]() {
+        const HRESULT coinit = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+        const bool coinit_ok = SUCCEEDED(coinit);
+        if (FAILED(coinit) && coinit != static_cast<HRESULT>(0x80010106)) {  // RPC_E_CHANGED_MODE
+            return;
+        }
 
-    IMMDeviceEnumerator* en = nullptr;
-    HRESULT hr =
-        CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_INPROC_SERVER,
-                         __uuidof(IMMDeviceEnumerator), reinterpret_cast<void**>(&en));
-    if (FAILED(hr) || en == nullptr) {
-        if (coinit_done) {
-            CoUninitialize();
-        }
-        return cached;
-    }
-
-    IMMDeviceCollection* coll = nullptr;
-    hr = en->EnumAudioEndpoints(eCapture, DEVICE_STATE_ACTIVE, &coll);
-    en->Release();
-    if (FAILED(hr) || coll == nullptr) {
-        if (coinit_done) {
-            CoUninitialize();
-        }
-        return cached;
-    }
-
-    UINT n = 0;
-    coll->GetCount(&n);
-    LPWSTR cable_id = nullptr;
-    std::wstring cable_name;
-    for (UINT i = 0; i < n; ++i) {
-        IMMDevice* dev = nullptr;
-        if (FAILED(coll->Item(i, &dev)) || dev == nullptr) {
-            continue;
-        }
-        IPropertyStore* ps = nullptr;
-        if (FAILED(dev->OpenPropertyStore(STGM_READ, &ps)) || ps == nullptr) {
-            dev->Release();
-            continue;
-        }
-        PROPVARIANT pv;
-        PropVariantInit(&pv);
-        bool match = false;
-        if (SUCCEEDED(ps->GetValue(PKEY_Device_FriendlyName, &pv)) && pv.vt == VT_LPWSTR &&
-            pv.pwszVal != nullptr) {
-            if (friendly_name_is_vb_cable_capture(pv.pwszVal)) {
-                match = true;
-                cable_name = pv.pwszVal;
+        IMMDeviceEnumerator* en = nullptr;
+        HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_INPROC_SERVER,
+                                      __uuidof(IMMDeviceEnumerator), reinterpret_cast<void**>(&en));
+        if (FAILED(hr) || en == nullptr) {
+            if (coinit_ok) {
+                CoUninitialize();
             }
+            return;
         }
-        PropVariantClear(&pv);
-        ps->Release();
-        if (match) {
-            if (SUCCEEDED(dev->GetId(&cable_id)) && cable_id != nullptr) {
+
+        IMMDeviceCollection* coll = nullptr;
+        hr = en->EnumAudioEndpoints(eCapture, DEVICE_STATE_ACTIVE, &coll);
+        en->Release();
+        if (FAILED(hr) || coll == nullptr) {
+            if (coinit_ok) {
+                CoUninitialize();
+            }
+            return;
+        }
+
+        UINT n = 0;
+        coll->GetCount(&n);
+        LPWSTR cable_id = nullptr;
+        std::wstring cable_name;
+        for (UINT i = 0; i < n; ++i) {
+            IMMDevice* dev = nullptr;
+            if (FAILED(coll->Item(i, &dev)) || dev == nullptr) {
+                continue;
+            }
+            IPropertyStore* ps = nullptr;
+            if (FAILED(dev->OpenPropertyStore(STGM_READ, &ps)) || ps == nullptr) {
                 dev->Release();
-                break;
+                continue;
+            }
+            PROPVARIANT pv_fn;
+            PropVariantInit(&pv_fn);
+            if (SUCCEEDED(ps->GetValue(PKEY_Device_FriendlyName, &pv_fn)) && pv_fn.vt == VT_LPWSTR &&
+                pv_fn.pwszVal != nullptr) {
+                cable_name = pv_fn.pwszVal;
+            }
+            PropVariantClear(&pv_fn);
+
+            const bool match = property_store_matches_vb_cable_capture(ps);
+            if (match && cable_name.empty()) {
+                PROPVARIANT pv_d;
+                PropVariantInit(&pv_d);
+                if (SUCCEEDED(ps->GetValue(PKEY_Device_DeviceDesc, &pv_d)) && pv_d.vt == VT_LPWSTR &&
+                    pv_d.pwszVal != nullptr) {
+                    cable_name = pv_d.pwszVal;
+                }
+                PropVariantClear(&pv_d);
+            }
+            ps->Release();
+            if (match) {
+                if (SUCCEEDED(dev->GetId(&cable_id)) && cable_id != nullptr) {
+                    dev->Release();
+                    break;
+                }
+            }
+            if (cable_id != nullptr) {
+                CoTaskMemFree(cable_id);
+                cable_id = nullptr;
+            }
+            cable_name.clear();
+            dev->Release();
+        }
+        coll->Release();
+
+        if (cable_id == nullptr) {
+            if (coinit_ok) {
+                CoUninitialize();
+            }
+            return;
+        }
+
+        constexpr DWORD k_pc_ctx = CLSCTX_INPROC_SERVER | CLSCTX_LOCAL_SERVER;
+        ILVPolicyConfigWin7* pc = nullptr;
+        hr = CoCreateInstance(CLSID_CPolicyConfigClient, nullptr, k_pc_ctx, IID_ILVPolicyConfigWin7,
+                              reinterpret_cast<void**>(&pc));
+        if (SUCCEEDED(hr) && pc != nullptr) {
+            hr = set_default_capture_roles(pc, cable_id);
+            pc->Release();
+        } else {
+            ILVPolicyConfigVista* pv = nullptr;
+            hr = CoCreateInstance(CLSID_CPolicyConfigVistaClient, nullptr, k_pc_ctx, IID_ILVPolicyConfigVista,
+                                  reinterpret_cast<void**>(&pv));
+            if (SUCCEEDED(hr) && pv != nullptr) {
+                hr = set_default_capture_roles_vista(pv, cable_id);
+                pv->Release();
             }
         }
-        if (cable_id != nullptr) {
-            CoTaskMemFree(cable_id);
-            cable_id = nullptr;
-        }
-        dev->Release();
-    }
-    coll->Release();
 
-    if (cable_id == nullptr) {
-        if (coinit_done) {
+        CoTaskMemFree(cable_id);
+        if (coinit_ok) {
             CoUninitialize();
         }
-        return cached;
-    }
 
-    ILVPolicyConfigWin7* pc = nullptr;
-    hr = CoCreateInstance(CLSID_CPolicyConfigClient, nullptr, CLSCTX_INPROC_SERVER, IID_ILVPolicyConfigWin7,
-                          reinterpret_cast<void**>(&pc));
-    if (SUCCEEDED(hr) && pc != nullptr) {
-        hr = set_default_capture_roles(pc, cable_id);
-        pc->Release();
-    } else {
-        ILVPolicyConfigVista* pv = nullptr;
-        hr = CoCreateInstance(CLSID_CPolicyConfigVistaClient, nullptr, CLSCTX_INPROC_SERVER,
-                              IID_ILVPolicyConfigVista, reinterpret_cast<void**>(&pv));
-        if (SUCCEEDED(hr) && pv != nullptr) {
-            hr = set_default_capture_roles_vista(pv, cable_id);
-            pv->Release();
+        if (FAILED(hr)) {
+            std::fprintf(stderr,
+                         "[LiveVocoder] Native Windows: could not set default mic to VB-Audio CABLE Output (HRESULT "
+                         "0x%08lx). Set it manually in Settings > Sound > Input, or in Discord/OBS.\n",
+                         static_cast<unsigned long>(hr));
+            return;
         }
-    }
 
-    CoTaskMemFree(cable_id);
-    if (coinit_done) {
-        CoUninitialize();
-    }
-
-    if (FAILED(hr)) {
-        std::fprintf(stderr,
-                     "[LiveVocoder] Native Windows: could not set default mic to VB-Audio CABLE Output (HRESULT "
-                     "0x%08lx). Set it manually in Settings > Sound > Input, or in Discord/OBS.\n",
-                     static_cast<unsigned long>(hr));
-        return cached;
-    }
-
-    static bool logged = false;
-    if (!logged) {
-        logged = true;
-        std::fprintf(stderr,
-                     "[LiveVocoder] Native Windows: default recording device set to VB-Audio CABLE Output "
-                     "(Discord/OBS can use Default). Disable: LIVE_VOCODER_WIN_DEFAULT_VIRT_MIC=0.\n");
-    }
-    std::string out = "Windows default mic → CABLE Output";
-    if (!cable_name.empty()) {
-        out += " (";
-        const int need = WideCharToMultiByte(CP_UTF8, 0, cable_name.c_str(), -1, nullptr, 0, nullptr, nullptr);
-        if (need > 1) {
-            std::string utf8(static_cast<std::size_t>(need - 1), '\0');
-            WideCharToMultiByte(CP_UTF8, 0, cable_name.c_str(), -1, utf8.data(), need, nullptr, nullptr);
-            out += utf8;
-            out += ')';
+        static bool logged = false;
+        if (!logged) {
+            logged = true;
+            std::fprintf(stderr,
+                         "[LiveVocoder] Native Windows: default recording device set to VB-Audio CABLE Output "
+                         "(Discord/OBS can use Default). Disable: LIVE_VOCODER_WIN_DEFAULT_VIRT_MIC=0.\n");
         }
-    }
-    cached = std::move(out);
+        std::string out = "Windows default mic → CABLE Output";
+        if (!cable_name.empty()) {
+            out += " (";
+            const int need = WideCharToMultiByte(CP_UTF8, 0, cable_name.c_str(), -1, nullptr, 0, nullptr, nullptr);
+            if (need > 1) {
+                std::string utf8(static_cast<std::size_t>(need - 1), '\0');
+                WideCharToMultiByte(CP_UTF8, 0, cable_name.c_str(), -1, utf8.data(), need, nullptr, nullptr);
+                out += utf8;
+                out += ')';
+            }
+        }
+        built = std::move(out);
+    }).join();
+
+    cached = std::move(built);
     return cached;
 }
 

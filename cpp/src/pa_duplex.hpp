@@ -44,3 +44,6 @@ std::string pa_portaudio_virt_capture_hint();
 
 /** Windows: short footer hint for device routing (Wine vs native). Empty on other platforms. */
 std::string pa_windows_virt_mic_route_hint();
+
+/** Native Windows: footer line when PortAudio does not expose a VB-virtual-cable playback device. */
+std::string pa_windows_native_vb_cable_portaudio_hint();

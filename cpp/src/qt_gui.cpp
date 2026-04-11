@@ -501,6 +501,13 @@ private:
                 }
                 t += QString::fromStdString(wh);
             }
+            const std::string vb_miss = pa_windows_native_vb_cable_portaudio_hint();
+            if (!vb_miss.empty()) {
+                if (!t.isEmpty()) {
+                    t += QStringLiteral(" · ");
+                }
+                t += QString::fromStdString(vb_miss);
+            }
         }
 #endif
         status_foot_->setText(t.isEmpty() ? QStringLiteral("PortAudio / PipeWire status unavailable.") : t);

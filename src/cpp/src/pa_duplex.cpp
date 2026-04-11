@@ -69,7 +69,31 @@ static int lv_win32_portaudio_host_api_score(PaHostApiIndex api_ix) {
     if (lv_ci_hay_contains(a->name, "mme")) {
         return 1;
     }
+    if (lv_ci_hay_contains(a->name, "wdm") || lv_ci_hay_contains(a->name, "kernel") ||
+        lv_ci_hay_contains(a->name, "ks")) {
+        return 2;
+    }
     return 0;
+}
+
+/** PortAudio device name suggests VB-Audio / virtual cable (spacing and wording vary by host API). */
+static bool lv_win32_pa_name_hints_vb_virtual_cable(const char* nm) {
+    if (nm == nullptr || nm[0] == '\0') {
+        return false;
+    }
+    if (lv_ci_hay_contains(nm, "vb-audio")) {
+        return true;
+    }
+    if (lv_ci_hay_contains(nm, "vb audio")) {
+        return true;
+    }
+    if (lv_ci_hay_contains(nm, "vbaudio")) {
+        return true;
+    }
+    if (lv_ci_hay_contains(nm, "virtual cable")) {
+        return true;
+    }
+    return false;
 }
 
 /**
@@ -122,11 +146,13 @@ static PaDeviceIndex lv_native_windows_pick_vb_cable_output_device(PaDeviceIndex
             continue;
         }
         const char* nm = inf->name;
-        if (!lv_ci_hay_contains(nm, "vb-audio")) {
+        if (!lv_win32_pa_name_hints_vb_virtual_cable(nm)) {
             continue;
         }
         const int sc = lv_win32_portaudio_host_api_score(inf->hostApi);
-        if (lv_ci_hay_contains(nm, "cable") && lv_ci_hay_contains(nm, "input")) {
+        const bool named_cable_in = (lv_ci_hay_contains(nm, "cable") && lv_ci_hay_contains(nm, "input")) ||
+                                    lv_ci_hay_contains(nm, "cable input");
+        if (named_cable_in) {
             if (sc > best_named_score) {
                 best_named_score = sc;
                 best_named = i;
@@ -163,7 +189,7 @@ static bool pa_output_name_is_windows_virtual_audio_route(const char* name) {
     if (name == nullptr || name[0] == '\0') {
         return false;
     }
-    if (lv_ci_hay_contains(name, "vb-audio")) {
+    if (lv_win32_pa_name_hints_vb_virtual_cable(name)) {
         return true;
     }
     if (lv_ci_hay_contains(name, "voicemeeter")) {
@@ -510,6 +536,14 @@ PaDeviceIndex pick_output_device() {
                 }
                 return cab;
             }
+            static bool logged_no_vb = false;
+            if (!logged_no_vb) {
+                logged_no_vb = true;
+                std::fprintf(stderr,
+                             "[LiveVocoder] Native Windows: no VB-Virtual-Cable playback device in PortAudio — "
+                             "install VB-Audio Virtual Cable or set LIVE_VOCODER_PA_OUTPUT. "
+                             "LIVE_VOCODER_PA_LIST_DEVICES=1 lists devices.\n");
+            }
         }
     }
 #endif
@@ -681,7 +715,7 @@ std::string pa_portaudio_virt_capture_hint() {
             lv_ci_hay_contains(name, "virtual") || lv_ci_hay_contains(name, "live_vocoder") ||
             lv_ci_hay_contains(name, "remap")
 #if defined(_WIN32)
-            || lv_ci_hay_contains(name, "vb-audio") || lv_ci_hay_contains(name, "voicemeeter")
+            || lv_win32_pa_name_hints_vb_virtual_cable(name) || lv_ci_hay_contains(name, "voicemeeter")
 #endif
         ) {
             hits.emplace_back(name);
@@ -717,5 +751,31 @@ std::string pa_windows_virt_mic_route_hint() {
            "Install from vb-audio.com if needed. Overrides: LIVE_VOCODER_PA_OUTPUT / LIVE_VOCODER_PA_INPUT / *_INDEX; "
            "LIVE_VOCODER_DISABLE_VB_CABLE=1 or LIVE_VOCODER_WIN_DEFAULT_VIRT_MIC=0 skips auto default-mic; "
            "LIVE_VOCODER_PA_LIST_DEVICES=1 lists names.";
+#endif
+}
+
+std::string pa_windows_native_vb_cable_portaudio_hint() {
+#if !defined(_WIN32)
+    return {};
+#else
+    if (lv_windows_is_wine_host()) {
+        return {};
+    }
+    const char* dis = std::getenv("LIVE_VOCODER_DISABLE_VB_CABLE");
+    if (dis != nullptr && dis[0] != '\0' &&
+        (dis[0] == '1' || dis[0] == 't' || dis[0] == 'T' || dis[0] == 'y' || dis[0] == 'Y')) {
+        return {};
+    }
+    const int n_raw = Pa_GetDeviceCount();
+    if (n_raw <= 0) {
+        return {};
+    }
+    const PaDeviceIndex cab =
+        lv_native_windows_pick_vb_cable_output_device(static_cast<PaDeviceIndex>(n_raw));
+    if (cab >= 0) {
+        return {};
+    }
+    return "VB-Cable playback not in device list — install VB-Audio Virtual Cable (vb-audio.com) or set "
+           "LIVE_VOCODER_PA_OUTPUT (see LIVE_VOCODER_PA_LIST_DEVICES=1).";
 #endif
 }
