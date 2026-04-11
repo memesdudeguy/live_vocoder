@@ -99,8 +99,9 @@ Name: "{commondesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Working
 
 [Run]
 #ifexist "..\dist-windows-installer-minimal\extras\VBCABLE_Setup_x64.exe"
-; VB-Audio setup: -i install, -h silent UI, -H extra silent, -n no reboot prompt (driver/UAC may still appear).
-Filename: "{app}\extras\VBCABLE_Setup_x64.exe"; Parameters: "-i -h -H -n"; StatusMsg: "Installing VB-Audio Virtual Cable (silent)..."; Description: "Install VB-Audio Virtual Cable"; Flags: waituntilterminated postinstall skipifdoesntexist; Tasks: vbcable; Check: not IsRunningUnderWine
+; VB-Audio setup needs admin (driver). Verb runas + shellexec avoids CreateProcess error 740 when the main setup is not elevated.
+; Flags: -i install, -h silent UI, -H extra silent, -n no reboot prompt.
+Filename: "{app}\extras\VBCABLE_Setup_x64.exe"; Parameters: "-i -h -H -n"; StatusMsg: "Installing VB-Audio Virtual Cable (UAC may prompt)..."; Description: "Install VB-Audio Virtual Cable"; Verb: runas; Flags: shellexec waituntilterminated postinstall skipifdoesntexist; Tasks: vbcable; Check: not IsRunningUnderWine
 #endif
 Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; Description: "Launch {#MyAppName}"; Flags: nowait postinstall skipifsilent skipifdoesntexist; Check: not IsRunningUnderWine
 
