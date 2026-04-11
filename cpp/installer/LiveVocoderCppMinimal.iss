@@ -351,13 +351,18 @@ begin
         WizardForm.StatusLabel.Caption := 'Installing VB-Audio Virtual Cable (UAC may prompt)...';
         WizardForm.Update;
       end;
-      if not ShellExec('runas', ExpandConstant('{app}\extras\VBCABLE_Setup_x64.exe'), '-i -h -H -n',
+      if ShellExec('runas', ExpandConstant('{app}\extras\VBCABLE_Setup_x64.exe'), '-i -h -H -n',
            ExpandConstant('{app}\extras'), SW_SHOW, ewWaitUntilTerminated, VbEc) then
       begin
-        if not WizardSilent then
-          MsgBox('VB-Audio Virtual Cable could not be started (UAC cancelled?). You can run manually:'#13#10 +
+        { Silent VB-Cable can still fail (driver block, policy); exit code was invisible before. }
+        if (VbEc <> 0) and (not WizardSilent) then
+          MsgBox('VB-Audio Virtual Cable setup finished with exit code ' + IntToStr(VbEc) + '.'#13#10 +
+                 'If CABLE devices are missing in OBS, approve any driver prompts, then run the installer manually (double-click, no silent flags) from:'#13#10 +
                  ExpandConstant('{app}\extras\VBCABLE_Setup_x64.exe'), mbInformation, MB_OK);
-      end;
+      end
+      else if not WizardSilent then
+        MsgBox('VB-Audio Virtual Cable could not be started (UAC cancelled?). Run manually:'#13#10 +
+               ExpandConstant('{app}\extras\VBCABLE_Setup_x64.exe'), mbInformation, MB_OK);
     end
 #endif
     ;

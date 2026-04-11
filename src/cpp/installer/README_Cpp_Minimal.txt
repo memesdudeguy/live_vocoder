@@ -29,6 +29,12 @@ install (not the ``[Run]`` list, which used ``CreateProcess`` and could fail wit
 args ``-i -h -H -n``; UAC still appears for the driver. Fully unattended installs may need a
 trusted-publisher certificate (VB-Audio / Microsoft docs).
 
+**If OBS has no “CABLE Input / Output” after the checkbox:** You must approve **UAC** and any **Windows
+Security** “install driver” prompts for the elevated VB-Cable window. If unsure it succeeded, open
+``C:\Program Files\Live Vocoder\extras\VBCABLE_Setup_x64.exe`` (double-click, not silent) and finish
+the wizard; then **restart OBS** or sign out/in. Check **Device Manager → Sound, video and game
+controllers** for **VB-Audio Virtual Cable**.
+
 
 Smoke test (.f32 loads without starting audio)
 ----------------------------------------------
