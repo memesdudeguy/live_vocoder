@@ -49,6 +49,9 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
+#ifexist "..\dist-windows-installer-minimal\extras\VBCABLE_Setup_x64.exe"
+Name: "vbcable"; Description: "Install VB-Audio Virtual Cable (virtual mic + CABLE devices for Discord/OBS; UAC / driver prompts)"; GroupDescription: "Windows native audio:"; Flags: checkedonce; Check: not IsRunningUnderWine
+#endif
 
 [Files]
 Source: "LiveVocoder.ico"; DestDir: "{app}"; Flags: ignoreversion
@@ -62,6 +65,9 @@ Source: "{#MinimalRoot}\README_Cpp_Minimal.txt"; DestDir: "{app}"; DestName: "RE
 Source: "{#MinimalRoot}\Run-from-QEMU-share.bat"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "{#MinimalRoot}\smoke_carrier.f32"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "{#MinimalRoot}\SmokeValidateF32.bat"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+#ifexist "..\dist-windows-installer-minimal\extras\VBCABLE_Setup_x64.exe"
+Source: "{#MinimalRoot}\extras\VBCABLE_Setup_x64.exe"; DestDir: "{app}\extras"; Flags: ignoreversion
+#endif
 ; Per-user carrier library (matches SDL: %USERPROFILE%\Documents\LiveVocoderCarriers). Not removed on uninstall.
 Source: "CarriersFolderReadme.txt"; DestDir: "{userdocs}\LiveVocoderCarriers"; DestName: "README.txt"; Flags: ignoreversion uninsneveruninstall
 ; Linux host notes — only when the installer itself runs under Wine (skipped on native Windows).
@@ -84,6 +90,9 @@ Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 Name: "{commondesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\LiveVocoder.ico"; Tasks: desktopicon; Check: not IsRunningUnderWine
 
 [Run]
+#ifexist "..\dist-windows-installer-minimal\extras\VBCABLE_Setup_x64.exe"
+Filename: "{app}\extras\VBCABLE_Setup_x64.exe"; StatusMsg: "Installing VB-Audio Virtual Cable (follow on-screen and UAC prompts)..."; Description: "Install VB-Audio Virtual Cable"; Flags: waituntilterminated postinstall skipifsilent skipifdoesntexist; Tasks: vbcable; Check: not IsRunningUnderWine
+#endif
 Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; Description: "Launch {#MyAppName}"; Flags: nowait postinstall skipifsilent skipifdoesntexist; Check: not IsRunningUnderWine
 
 [UninstallDelete]

@@ -53,7 +53,7 @@ else
 fi
 
 DST="${ROOT}/dist-windows-installer-minimal"
-mkdir -p "${DST}/fonts"
+mkdir -p "${DST}/fonts" "${DST}/extras"
 rm -f "${DST}"/*.dll 2>/dev/null || true
 
 if [[ -n "${LV_MINIMAL_EXE:-}" ]]; then
@@ -74,6 +74,13 @@ fi
 
 if [[ -f "${ROOT}/installer/LiveVocoder.ico" ]]; then
   cp -f "${ROOT}/installer/LiveVocoder.ico" "${DST}/"
+fi
+_vb_src="${ROOT}/installer/third_party/VBCABLE_Setup_x64.exe"
+if [[ -f "${_vb_src}" ]]; then
+  cp -f "${_vb_src}" "${DST}/extras/"
+  echo "bundle-installer-minimal: bundled VB-Audio Virtual Cable installer → ${DST}/extras/VBCABLE_Setup_x64.exe" >&2
+else
+  echo "bundle-installer-minimal: optional VB-Cable not found (${_vb_src}) — native Windows virtual mic routing needs a manual install or drop VBCABLE_Setup_x64.exe in installer/third_party/ (see third_party/README.txt)." >&2
 fi
 if [[ -f "${SRC}/app-icon.png" ]]; then
   cp -f "${SRC}/app-icon.png" "${DST}/"

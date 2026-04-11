@@ -25,6 +25,8 @@
 #   ./scripts/test-installer-qemu-win10.sh …
 #   ./run-win10-qemu-test.sh …
 #   ./cpp/run-win10-qemu-test.sh …
+# From **cpp/** (your build dir): there is no ./scripts/ here — use:
+#   ./run-win10-qemu-test.sh …   or   ../scripts/test-installer-qemu-win10.sh …
 # From **cpp/dist-installer/** only: ../run-win10-qemu-test.sh …  (not ../.. — that is wrong from repo root)
 #
 # First-time Windows install (empty disk):
@@ -45,13 +47,24 @@
 #   LV_QEMU_CPUS       vCPUs (default: 4)
 #   LV_QEMU_CPU        passed to -cpu (default: host + Hyper-V enlightenments for snappier Windows guests)
 #   LV_QEMU_DISK_FAST  1 (default) = qcow2 cache=writeback,discard=unmap on NVMe; 0 = plain drive line
-#   LV_QEMU_DISK_AIO   native (default) = lower qcow2 latency on Linux; threads = omit aio=native if unstable
+#   LV_QEMU_DISK_AIO   native (default) = lower qcow2 latency on Linux; threads = omit aio=native + cache.direct
+#                        (use threads if QEMU prints **aio failed: Input/output error** — common on FUSE/sshfs/NFS
+#                        or quirky btrfs/ZFS layers; also try moving WIN10_DISK to ext4/xfs on local disk)
 #   LV_QEMU_MISC_FAST  1 (default) = -rtc driftfix=slew + kvm-pit lost_tick_policy=discard (snappier Windows timers)
 #   LV_QEMU_FAST_PRESET 1 = set RAM=12288 CPUS=6 AUDIO=0 for a quicker interactive test (override with env below)
 #   LV_QEMU_DEBUG      1 = write QEMU trace to $LV_QEMU_CACHE/qemu-debug-*.log (-d guest_errors)
 #   LV_QEMU_MON        1 = QEMU monitor on telnet 127.0.0.1:5555 (commands: help, info status, log snapshot)
 #   LV_QEMU_DISPLAY    gtk | sdl | none | full gtk string, e.g. gtk,zoom-to-fit=on
 #                        default: gtk desktop window when DISPLAY or WAYLAND set, else sdl
+#   LV_QEMU_CLIPBOARD  0 (default) = no clipboard bridge
+#                      1 | vdagent = virtio-serial + qemu-vdagent (works with gtk/sdl; host↔guest text/images
+#                        when the guest runs **spice-vdagent** — install **SPICE guest tools** for Windows,
+#                        e.g. from https://www.spice-space.org/download.html ; the VirtIO serial driver comes
+#                        from virtio-win.iso if Windows has no inbox driver for that PCI device)
+#                      vnc = same vdagent devices + **VNC** instead of a QEMU window (binds LV_QEMU_VNC_ADDR /
+#                        LV_QEMU_VNC_DISPLAY; connect with TigerVNC / Remmina and enable clipboard in the client)
+#   LV_QEMU_VNC_ADDR   VNC bind address when LV_QEMU_CLIPBOARD=vnc (default: 127.0.0.1)
+#   LV_QEMU_VNC_DISPLAY display index N → TCP port 5900+N (default: 0 → port 5900)
 #   LV_QEMU_GTK_OPTS   extra gtk display options (default: zoom-to-fit=on)
 #   LV_QEMU_FULLSCREEN  set to 1 to add full-screen=on to the gtk display
 #   LV_QEMU_AUDIO       1 (default) = guest sound; 0 = no -audiodev / sound card
@@ -65,6 +78,9 @@
 #   VIRTIO_ISO         optional path to virtio-win.iso (Fedora) for extra drivers
 #
 # If -display gtk fails, install the UI driver:  sudo pacman -S qemu-ui-gtk
+#
+# If QEMU dies with **aio failed: Input/output error** on the qcow2 NVMe drive:
+#   LV_QEMU_DISK_AIO=threads ./run-win10-qemu-test.sh   # from cpp/, or ../scripts/... from repo root
 #
 # If OVMF says NVMe boot "Not Found" → PXE: often the qcow2 is still empty (Windows never installed). Check:
 #   qemu-img info ~/.cache/livevocoder-qemu/win10-test.qcow2   # "disk size" tiny vs 64G virtual = empty
@@ -330,8 +346,29 @@ QEMU_ARGS+=(-device "pcie-root-port,id=lv_rp_nvme,bus=pcie.0,addr=03.0")
 # QEMU ≥6.1 auto-generates a non-zero namespace EUI; OVMF Boot0002 often stores NVMe(…,00-00-…-00).
 # Controller + nvme-ns with eui64=0 matches that path (avoids BdsDxe "Not Found" → PXE).
 
+CLIP_MODE="${LV_QEMU_CLIPBOARD:-0}"
+case "${CLIP_MODE}" in
+  1|true|yes|vdagent|agent) CLIP_MODE=vdagent ;;
+  vnc|VNC) CLIP_MODE=vnc ;;
+  0|false|no|off|"") CLIP_MODE=off ;;
+  *) die "LV_QEMU_CLIPBOARD must be 0, 1, vdagent, or vnc (got: ${LV_QEMU_CLIPBOARD:-})" ;;
+esac
+if [[ "$CLIP_MODE" != "off" ]]; then
+  if ! "$QEMU_BIN" -chardev help 2>&1 | grep -qF "qemu-vdagent"; then
+    die "LV_QEMU_CLIPBOARD requires a QEMU build with the qemu-vdagent chardev (try a full qemu-system-x86 package)"
+  fi
+fi
+
 DISP="${LV_QEMU_DISPLAY:-}"
-if [[ -z "$DISP" ]]; then
+QEMU_DISPLAY_SPEC=""
+if [[ "$CLIP_MODE" == "vnc" ]]; then
+  _vnc_addr="${LV_QEMU_VNC_ADDR:-127.0.0.1}"
+  _vnc_disp="${LV_QEMU_VNC_DISPLAY:-0}"
+  _vnc_port=$((5900 + _vnc_disp))
+  QEMU_DISPLAY_SPEC="vnc=${_vnc_addr}:${_vnc_disp} (tcp ${_vnc_port})"
+  QEMU_ARGS+=(-display "vnc=${_vnc_addr}:${_vnc_disp}")
+  echo "LV_QEMU_CLIPBOARD=vnc: VNC ${_vnc_addr}:${_vnc_port} — e.g.  vncviewer ${_vnc_addr}:${_vnc_port}  (TigerVNC / Remmina: turn on clipboard)" >&2
+elif [[ -z "$DISP" ]]; then
   if [[ -n "${DISPLAY:-}" || -n "${WAYLAND_DISPLAY:-}" ]]; then
     DISP=gtk
   else
@@ -339,22 +376,34 @@ if [[ -z "$DISP" ]]; then
   fi
 fi
 # GTK "desktop mode": zoom guest into the window (good for Win11). Allow full LV_QEMU_DISPLAY=gtk,foo,bar.
-QEMU_DISPLAY_SPEC=""
-if [[ "$DISP" == "gtk" ]]; then
-  _gopts="${LV_QEMU_GTK_OPTS:-zoom-to-fit=on}"
-  if [[ "${LV_QEMU_FULLSCREEN:-0}" == "1" || "${LV_QEMU_FULLSCREEN:-}" == "yes" ]]; then
-    _gopts="${_gopts},full-screen=on"
+if [[ "$CLIP_MODE" != "vnc" ]]; then
+  if [[ "$DISP" == "gtk" ]]; then
+    _gopts="${LV_QEMU_GTK_OPTS:-zoom-to-fit=on}"
+    if [[ "${LV_QEMU_FULLSCREEN:-0}" == "1" || "${LV_QEMU_FULLSCREEN:-}" == "yes" ]]; then
+      _gopts="${_gopts},full-screen=on"
+    fi
+    QEMU_DISPLAY_SPEC="gtk,${_gopts}"
+    QEMU_ARGS+=(-display "$QEMU_DISPLAY_SPEC")
+  elif [[ "$DISP" == gtk,* ]]; then
+    QEMU_DISPLAY_SPEC="$DISP"
+    QEMU_ARGS+=(-display "$DISP")
+  else
+    QEMU_DISPLAY_SPEC="$DISP"
+    QEMU_ARGS+=(-display "$DISP")
   fi
-  QEMU_DISPLAY_SPEC="gtk,${_gopts}"
-  QEMU_ARGS+=(-display "$QEMU_DISPLAY_SPEC")
-elif [[ "$DISP" == gtk,* ]]; then
-  QEMU_DISPLAY_SPEC="$DISP"
-  QEMU_ARGS+=(-display "$DISP")
-else
-  QEMU_DISPLAY_SPEC="$DISP"
-  QEMU_ARGS+=(-display "$DISP")
+fi
+if [[ "$CLIP_MODE" == "vdagent" && "${DISP:-}" == "none" ]]; then
+  echo "warning: LV_QEMU_CLIPBOARD=vdagent with LV_QEMU_DISPLAY=none — host clipboard usually needs gtk/sdl or LV_QEMU_CLIPBOARD=vnc + a VNC viewer." >&2
 fi
 QEMU_ARGS+=(-usb -device "usb-tablet")
+
+if [[ "$CLIP_MODE" != "off" ]]; then
+  # Guest: SPICE guest tools (spice-vdagent) + VirtIO serial driver (virtio-win.iso) so com.redhat.spice.0 exists.
+  QEMU_ARGS+=(-device "virtio-serial-pci,id=lv_vser0")
+  QEMU_ARGS+=(-chardev "qemu-vdagent,id=lv_vdagent,clipboard=on,mouse=off")
+  QEMU_ARGS+=(-device "virtserialport,bus=lv_vser0.0,chardev=lv_vdagent,name=com.redhat.spice.0")
+  echo "Clipboard bridge: virtio-serial + qemu-vdagent (install SPICE guest tools in Windows; virtio-win for the serial device if needed)." >&2
+fi
 
 # Keep PCI order stable: NVMe/TPM must stay before ich9-intel-hda or OVMF boot entries break
 # ("failed to load ... NVMe ... Not Found"). Audio goes after disks/CDs.
@@ -477,7 +526,7 @@ case "${LV_QEMU_MON:-0}" in
     ;;
 esac
 
-echo "Disk: $DISK  |  -display $QEMU_DISPLAY_SPEC  |  RAM: ${RAM_MB}M  |  smp: ${CPUS}c/1t  |  -cpu ${QEMU_CPU}  |  nvme: format=qcow2${DISK_NVME_EXTRA}${DISK_AIO_EXTRA}  |  misc_fast: ${LV_QEMU_MISC_FAST:-1}  |  audio: $AUDIO_SUMMARY  |  smbd: $(command -v smbd 2>/dev/null || echo none)" >&2
+echo "Disk: $DISK  |  -display $QEMU_DISPLAY_SPEC  |  clipboard: ${CLIP_MODE:-off}  |  RAM: ${RAM_MB}M  |  smp: ${CPUS}c/1t  |  -cpu ${QEMU_CPU}  |  nvme: format=qcow2${DISK_NVME_EXTRA}${DISK_AIO_EXTRA}  |  misc_fast: ${LV_QEMU_MISC_FAST:-1}  |  audio: $AUDIO_SUMMARY  |  smbd: $(command -v smbd 2>/dev/null || echo none)" >&2
 "$QEMU_BIN" "${QEMU_ARGS[@]}"
 rc=$?
 cleanup_swtpm

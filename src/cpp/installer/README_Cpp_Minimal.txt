@@ -20,6 +20,12 @@ the app uses Windows ffmpeg.exe and host PipeWire via the installer’s Wine-onl
 **Native Windows** can auto-route playback to VB-Audio Virtual Cable (CABLE Input) when installed; **under Wine**
 that heuristic is off—use ``PULSE_SINK`` / null-sink routing on the Linux host instead.
 
+**Bundling VB-Cable in the setup (maintainers):** place ``VBCABLE_Setup_x64.exe`` (from https://vb-audio.com/Cable/)
+in ``cpp/installer/third_party/``, then run ``bundle-installer-minimal.sh`` / ``build-installer-minimal.sh``.
+The compiled ``LiveVocoder-Setup.exe`` then offers a checked wizard task to run that installer after the app
+is installed (UAC and driver prompts are expected). Without that file, the setup still builds; users install
+VB-Cable manually for the same virtual mic + virtual playback path.
+
 
 Smoke test (.f32 loads without starting audio)
 ----------------------------------------------
