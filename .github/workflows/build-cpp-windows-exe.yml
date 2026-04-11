@@ -80,6 +80,22 @@ jobs:
           if (-not (Test-Path $iscc)) { throw "ISCC.exe not found after choco install innosetup" }
           & $iscc "$env:GITHUB_WORKSPACE\cpp\installer\LiveVocoder.iss"
 
+      - name: Fetch VB-Cable (official zip) for minimal installer bundle
+        shell: pwsh
+        run: |
+          $zipUrl = "https://download.vb-audio.com/Download_CABLE/VBCABLE_Driver_Pack45.zip"
+          $stage = Join-Path $env:RUNNER_TEMP "vb-cable-pack"
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          $zip = Join-Path $stage "VBCABLE_Driver_Pack45.zip"
+          Invoke-WebRequest -Uri $zipUrl -OutFile $zip
+          Expand-Archive -Path $zip -DestinationPath $stage -Force
+          $setup = Join-Path $stage "VBCABLE_Setup_x64.exe"
+          if (-not (Test-Path $setup)) { throw "VBCABLE_Setup_x64.exe missing in VB-Audio zip (layout changed?)" }
+          $dest = Join-Path $env:GITHUB_WORKSPACE "cpp/installer/third_party"
+          New-Item -ItemType Directory -Force -Path $dest | Out-Null
+          Copy-Item -Force $setup (Join-Path $dest "VBCABLE_Setup_x64.exe")
+          Write-Host "Bundled VB-Cable setup from official package (VB-Audio donationware — see vb-audio.com/Cable/)."
+
       - name: Minimal SDL installer payload (6.0)
         shell: msys2 {0}
         run: |

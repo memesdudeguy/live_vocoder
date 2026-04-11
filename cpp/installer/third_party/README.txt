@@ -1,16 +1,18 @@
-VB-Audio Virtual Cable (optional installer bundle)
-=================================================
+VB-Audio Virtual Cable (bundled into LiveVocoder-Setup.exe)
+============================================================
 
-To ship **virtual microphone + virtual playback** support in `LiveVocoder-Setup.exe`, download the
-official x64 installer from VB-Audio and place it here **exactly** as:
+**GitHub Actions** (`.github/workflows/build-cpp-windows-exe.yml`) downloads the official
+`VBCABLE_Driver_Pack45.zip` from https://download.vb-audio.com/Download_CABLE/ , extracts
+`VBCABLE_Setup_x64.exe`, and places it here before `bundle-installer-minimal.sh` runs. Inno Setup
+then includes it under `{app}\extras\` with a checked wizard task on native Windows (see
+`LiveVocoderCppMinimal.iss`). VB-Audio software is **donationware** — see https://vb-audio.com/Cable/
+
+**Local / Wine builds:** copy the same file here manually if you want the VB-Cable step in your
+`LiveVocoder-Setup.exe`:
 
   VBCABLE_Setup_x64.exe
 
-Source: https://vb-audio.com/Cable/  (donateware; follow their license for redistribution).
+Then run `./bundle-installer-minimal.sh` (or `./build-installer-minimal.sh`).
 
-Then run `./bundle-installer-minimal.sh` (or `./build-installer-minimal.sh`). The setup wizard will
-offer a checked task to run this installer after the app files are installed (UAC / driver prompts
-are normal).
-
-Without this file, the Live Vocoder installer still builds; native Windows users can install
-VB-Cable manually for the same audio routing (see README_Cpp_Minimal.txt).
+Without this file locally, the minimal installer still builds but omits the VB-Cable task until you
+add the exe or use CI.
