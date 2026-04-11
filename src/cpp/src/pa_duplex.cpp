@@ -746,24 +746,9 @@ std::string pa_windows_virt_mic_route_hint() {
                "auto-routing (CABLE Input/Output) applies on native Windows only, not under Wine. "
                "LIVE_VOCODER_PA_LIST_DEVICES=1 lists devices; or run native Linux LiveVocoder.exe.";
     }
-    return "Native Windows + VB-Audio Virtual Cable: playback → CABLE Input; on startup we set the system default "
-           "microphone to CABLE Output when the driver is present (Discord/OBS can stay on Default). "
-           "Install from vb-audio.com if needed. Overrides: LIVE_VOCODER_PA_OUTPUT / LIVE_VOCODER_PA_INPUT / *_INDEX; "
-           "LIVE_VOCODER_DISABLE_VB_CABLE=1 or LIVE_VOCODER_WIN_DEFAULT_VIRT_MIC=0 skips auto default-mic; "
-           "LIVE_VOCODER_PA_LIST_DEVICES=1 lists names.";
-#endif
-}
-
-std::string pa_windows_native_vb_cable_portaudio_hint() {
-#if !defined(_WIN32)
-    return {};
-#else
-    if (lv_windows_is_wine_host()) {
-        return {};
-    }
-    const char* dis = std::getenv("LIVE_VOCODER_DISABLE_VB_CABLE");
-    if (dis != nullptr && dis[0] != '\0' &&
-        (dis[0] == '1' || dis[0] == 't' || dis[0] == 'T' || dis[0] == 'y' || dis[0] == 'Y')) {
+    const char* dis_vb = std::getenv("LIVE_VOCODER_DISABLE_VB_CABLE");
+    if (dis_vb != nullptr && dis_vb[0] != '\0' &&
+        (dis_vb[0] == '1' || dis_vb[0] == 't' || dis_vb[0] == 'T' || dis_vb[0] == 'y' || dis_vb[0] == 'Y')) {
         return {};
     }
     const int n_raw = Pa_GetDeviceCount();
@@ -773,9 +758,24 @@ std::string pa_windows_native_vb_cable_portaudio_hint() {
     const PaDeviceIndex cab =
         lv_native_windows_pick_vb_cable_output_device(static_cast<PaDeviceIndex>(n_raw));
     if (cab >= 0) {
-        return {};
+        return "VB-Audio Virtual Cable: CABLE Input found — vocoder output goes there; use CABLE Output as the mic "
+               "in Discord/OBS (or Default if default recording was set to CABLE Output). "
+               "Overrides: LIVE_VOCODER_PA_OUTPUT / _INDEX; LIVE_VOCODER_WIN_DEFAULT_VIRT_MIC=0; "
+               "LIVE_VOCODER_PA_LIST_DEVICES=1.";
     }
-    return "VB-Cable playback not in device list — install VB-Audio Virtual Cable (vb-audio.com) or set "
-           "LIVE_VOCODER_PA_OUTPUT (see LIVE_VOCODER_PA_LIST_DEVICES=1).";
+    return "VB-Cable not installed (no CABLE Input in PortAudio) — run VBCABLE_Setup_x64.exe from "
+           "Live Vocoder's Program Files\\…\\extras folder or install from https://vb-audio.com/Cable/ "
+           "(approve UAC + driver prompts; reboot if asked). Then CABLE Output should appear here and in OBS. "
+           "LIVE_VOCODER_PA_LIST_DEVICES=1 lists devices.";
+#endif
+}
+
+std::string pa_windows_native_vb_cable_portaudio_hint() {
+#if !defined(_WIN32)
+    return {};
+#else
+    // Merged into pa_windows_virt_mic_route_hint() so the status bar does not imply VB-Cable is present
+    // when PortAudio does not list CABLE Input.
+    return {};
 #endif
 }
