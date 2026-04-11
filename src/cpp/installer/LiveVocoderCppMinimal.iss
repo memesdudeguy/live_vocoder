@@ -27,7 +27,15 @@ DefaultGroupName={#MyAppName}
 OutputDir=..\dist-installer
 OutputBaseFilename={#MyOutputBase}
 SetupIconFile=LiveVocoder.ico
+WizardSmallImageFile=LiveVocoder.ico
 UninstallDisplayIcon={app}\LiveVocoder.ico
+; File properties → Details tab in Explorer (and consistent version resource on Setup.exe).
+VersionInfoVersion={#MyAppVersion}.0.0
+VersionInfoProductVersion={#MyAppVersion}
+VersionInfoTextVersion={#MyAppVersion}
+VersionInfoProductName={#MyAppName}
+VersionInfoCompany={#MyAppPublisher}
+VersionInfoDescription={#MyAppName} {#MyAppVersion} Setup
 Compression=lzma2/ultra64
 SolidCompression=yes
 ArchitecturesAllowed=x64compatible

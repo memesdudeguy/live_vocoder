@@ -111,7 +111,15 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
             target_link_options(live_vocoder_cpp PRIVATE "-mwindows")
         endif()
     endif()
-    target_sources(live_vocoder_cpp PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/installer/live_vocoder.rc")
+    set(_lv_rc "${CMAKE_CURRENT_SOURCE_DIR}/installer/live_vocoder.rc")
+    set(_lv_rc_inc "${CMAKE_CURRENT_SOURCE_DIR}/installer")
+    target_sources(live_vocoder_cpp PRIVATE "${_lv_rc}")
+    # windres/rc resolve ICON paths from the compile cwd; -I makes "LiveVocoder.ico" in live_vocoder.rc find the file.
+    if(MINGW OR CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+        set_source_files_properties("${_lv_rc}" PROPERTIES COMPILE_FLAGS "-I${_lv_rc_inc}")
+    elseif(MSVC)
+        set_source_files_properties("${_lv_rc}" PROPERTIES COMPILE_FLAGS "/I${_lv_rc_inc}")
+    endif()
     # Regenerate embedded-EXE icon before windres compiles live_vocoder.rc (needs installer/LiveVocoder.ico).
     if(LIVE_VOCODER_PYTHON3 AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/assets/app-icon.png")
         add_custom_command(

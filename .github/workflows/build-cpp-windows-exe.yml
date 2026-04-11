@@ -22,6 +22,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Regenerate LiveVocoder.ico from assets (Pillow)
+        shell: pwsh
+        run: |
+          python -m pip install --user -q pillow
+          python cpp/installer/gen_livevocoder_ico.py
+
       - uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
@@ -120,6 +126,8 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+
       - name: Download full installer artifact
         uses: actions/download-artifact@v4
         with:
@@ -132,6 +140,9 @@ jobs:
           name: LiveVocoder-Cpp-setup-v6.0
           path: release-assets
 
+      - name: Attach app icon for shortcuts / manual use
+        run: cp -f cpp/installer/LiveVocoder.ico release-assets/LiveVocoder-6.0.ico
+
       - name: Create GitHub Release with installers
         uses: softprops/action-gh-release@v2
         with:
@@ -141,3 +152,4 @@ jobs:
           files: |
             release-assets/LiveVocoder_Setup_*.exe
             release-assets/LiveVocoder-Setup.exe
+            release-assets/LiveVocoder-6.0.ico
