@@ -27,7 +27,7 @@ DefaultGroupName={#MyAppName}
 OutputDir=..\dist-installer
 OutputBaseFilename={#MyOutputBase}
 SetupIconFile=LiveVocoder.ico
-WizardSmallImageFile=LiveVocoder.ico
+; WizardSmallImageFile must be a valid .bmp for many Inno builds; .ico here triggers "Bitmap image is not valid."
 UninstallDisplayIcon={app}\LiveVocoder.ico
 ; File properties → Details tab in Explorer (and consistent version resource on Setup.exe).
 VersionInfoVersion={#MyAppVersion}.0.0

@@ -37,7 +37,6 @@ DefaultGroupName={#MyAppName}
 OutputDir=..\dist-installer
 OutputBaseFilename=LiveVocoder_Setup_{#MyAppVersion}
 SetupIconFile=LiveVocoder.ico
-WizardSmallImageFile=LiveVocoder.ico
 UninstallDisplayIcon={app}\LiveVocoder.ico
 VersionInfoVersion={#MyAppVersion}.0.0
 VersionInfoProductVersion={#MyAppVersion}
