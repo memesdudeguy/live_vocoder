@@ -24,9 +24,9 @@ that heuristic is off—use ``PULSE_SINK`` / null-sink routing on the Linux host
 ``VBCABLE_Setup_x64.exe`` into release ``LiveVocoder-Setup.exe`` (checked wizard task on native Windows).
 For local builds, place ``VBCABLE_Setup_x64.exe`` in ``cpp/installer/third_party/`` (extract from that zip
 or from https://vb-audio.com/Cable/ ) before ``bundle-installer-minimal.sh``. VB-Audio is donationware.
-The bundled ``VBCABLE_Setup_x64.exe`` is invoked with **silent** flags (``-i -h -H -n``). Windows may
-still show **UAC** and/or **driver trust** dialogs; fully unattended driver installs may require
-pre-importing the publisher certificate (see VB-Audio / Microsoft docs).
+The bundled ``VBCABLE_Setup_x64.exe`` is launched with **Verb runas** (UAC) and silent flags
+(``-i -h -H -n``) so it works when Live Vocoder was installed without admin. Driver trust / reboot
+may still apply; fully unattended installs may need a trusted-publisher certificate (VB-Audio / Microsoft docs).
 
 
 Smoke test (.f32 loads without starting audio)
