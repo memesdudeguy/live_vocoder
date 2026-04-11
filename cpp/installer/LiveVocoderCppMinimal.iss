@@ -61,7 +61,9 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 #ifexist "..\dist-windows-installer-minimal\extras\VBCABLE_Setup_x64.exe"
-Name: "vbcable"; Description: "Install VB-Audio Virtual Cable silently (CLI flags -i -h -H -n; UAC once if setup is not admin; Windows may still prompt for driver trust)"; GroupDescription: "Windows native audio:"; Flags: checkedonce; Check: not IsRunningUnderWine
+; No "checkedonce": it persists an unchecked state across reinstalls so VB-Cable never runs again.
+; Omit Flags so the grouped task defaults to checked each run (Inno: first task in group is checked by default).
+Name: "vbcable"; Description: "Install VB-Audio Virtual Cable (silent flags -i -h -H -n; UAC if setup is not admin; driver trust may still appear)"; GroupDescription: "Windows native audio:"; Check: not IsRunningUnderWine
 #endif
 
 [Files]
@@ -348,15 +350,15 @@ begin
     begin
       if not WizardSilent then
       begin
-        WizardForm.StatusLabel.Caption := 'Installing VB-Audio Virtual Cable (silent mode; UAC or driver trust may still appear)...';
+        WizardForm.StatusLabel.Caption := 'Installing VB-Audio Virtual Cable (silent flags; UAC or driver trust may appear)...';
         WizardForm.Update;
       end;
-      { When this setup is already elevated, Exec(..., SW_HIDE) runs VB-Cable with no extra wizard window
-        and returns a usable exit code. Otherwise ShellExec('runas') is required (error 740 if we used Exec). }
+      { Use SW_SHOW (not SW_HIDE): hidden subprocesses often fail for elevated NSIS/driver installs or skip UAC UI.
+        -i -h -H -n still suppresses VB-Audio wizard noise; user may see a brief window or security dialog. }
       if IsAdmin then
       begin
         if Exec(ExpandConstant('{app}\extras\VBCABLE_Setup_x64.exe'), '-i -h -H -n',
-             ExpandConstant('{app}\extras'), SW_HIDE, ewWaitUntilTerminated, VbEc) then
+             ExpandConstant('{app}\extras'), SW_SHOW, ewWaitUntilTerminated, VbEc) then
         begin
           if (VbEc > 0) and (not WizardSilent) then
             MsgBox('VB-Audio Virtual Cable setup finished with exit code ' + IntToStr(VbEc) + '.'#13#10 +
@@ -368,7 +370,7 @@ begin
                  ExpandConstant('{app}\extras\VBCABLE_Setup_x64.exe'), mbInformation, MB_OK);
       end
       else if ShellExec('runas', ExpandConstant('{app}\extras\VBCABLE_Setup_x64.exe'), '-i -h -H -n',
-           ExpandConstant('{app}\extras'), SW_HIDE, ewWaitUntilTerminated, VbEc) then
+           ExpandConstant('{app}\extras'), SW_SHOW, ewWaitUntilTerminated, VbEc) then
       begin
         { ShellExec(..., 'runas', ...) often leaves ResultCode as -1 even when the elevated child
           exits normally — Windows does not always propagate the child's exit code back. Only

@@ -24,8 +24,10 @@ that heuristic is off—use ``PULSE_SINK`` / null-sink routing on the Linux host
 ``VBCABLE_Setup_x64.exe`` into release ``LiveVocoder-Setup.exe`` (checked wizard task on native Windows).
 For local builds, place ``VBCABLE_Setup_x64.exe`` in ``cpp/installer/third_party/`` (extract from that zip
 or from https://vb-audio.com/Cable/ ) before ``bundle-installer-minimal.sh``. VB-Audio is donationware.
-The bundled ``VBCABLE_Setup_x64.exe`` runs **after** file install with silent args ``-i -h -H -n`` and
-**``SW_HIDE``** (no VB-Audio wizard window). If the Live Vocoder setup is **already elevated**
+The bundled ``VBCABLE_Setup_x64.exe`` runs **after** file install with silent args ``-i -h -H -n``.
+The subprocess uses **``SW_SHOW``** (not hidden): **``SW_HIDE``** often breaks **UAC** / NSIS / driver
+install paths. You may see a short window or security dialog; VB-Audio’s flags still skip their wizard.
+If the Live Vocoder setup is **already elevated**
 (**``IsAdmin``** — e.g. right-click Run as administrator, or install for all users with UAC), it uses
 **``Exec``** so the driver installer runs in-process as admin and exit codes are reliable. If the
 setup is not admin (typical per-user install), it uses **``ShellExec('runas', …)``** — one **UAC**
@@ -33,6 +35,10 @@ prompt, and Windows may still show **driver trust** / SmartScreen dialogs (not s
 installer without importing VB-Audio’s publisher certificate). Fully unattended installs may need that
 certificate or MDM policy (VB-Audio / Microsoft docs). **Note:** after ``runas``, the child exit code
 is often ``-1``; only positive codes are treated as definite failure.
+
+The wizard task no longer uses **``checkedonce``**: that flag **persists** an unchecked choice across
+reinstalls, so VB-Cable would **never run again** after you unchecked it once. The task is the default
+in its group so it stays **on** each run unless you turn it off for that install.
 
 **If OBS has no “CABLE Input / Output” after the checkbox:** You must approve **UAC** and any **Windows
 Security** “install driver” prompts for the elevated VB-Cable window. If unsure it succeeded, open
