@@ -39,51 +39,46 @@ if [[ -z "$iscc" ]] && command -v iscc.exe >/dev/null 2>&1; then
   iscc="$(command -v iscc.exe)"
 fi
 
+# Inno lives under the Wine prefix where it was installed. If WINEPREFIX points elsewhere (e.g. a throwaway
+# prefix from a prior test), fall back to $HOME/.wine so ISCC is still found.
+_wine_iscc=""
+_inno_wineprefix=""
+_prev_wp=""
+for _wp in "${WINEPREFIX:-$HOME/.wine}" "$HOME/.wine"; do
+  [[ -z "$_wp" ]] && continue
+  [[ "$_wp" == "$_prev_wp" ]] && continue
+  _prev_wp="$_wp"
+  for _sub in \
+    "Program Files (x86)/Inno Setup 6/ISCC.exe" \
+    "Program Files/Inno Setup 6/ISCC.exe"; do
+    if [[ -f "$_wp/drive_c/$_sub" ]]; then
+      _wine_iscc="$_wp/drive_c/$_sub"
+      _inno_wineprefix="$_wp"
+      break 2
+    fi
+  done
+done
+
 run_iscc() {
   local extra=("$@")
   if [[ -n "$iscc" ]]; then
     "$iscc" "${extra[@]}" "${ROOT}/installer/LiveVocoderCppMinimal.iss"
+  elif [[ -n "$_wine_iscc" ]] && command -v wine >/dev/null 2>&1; then
+    echo "Using Wine (WINEPREFIX=${_inno_wineprefix}): $_wine_iscc ${extra[*]}" >&2
+    (cd "${ROOT}/installer" && WINEPREFIX="${_inno_wineprefix}" wine "$_wine_iscc" "${extra[@]}" LiveVocoderCppMinimal.iss)
   else
-    _wp="${WINEPREFIX:-$HOME/.wine}"
-    _wiscc=""
-    for _sub in \
-      "Program Files (x86)/Inno Setup 6/ISCC.exe" \
-      "Program Files/Inno Setup 6/ISCC.exe"; do
-      if [[ -f "$_wp/drive_c/$_sub" ]]; then
-        _wiscc="$_wp/drive_c/$_sub"
-        break
-      fi
-    done
-    if [[ -n "$_wiscc" ]] && command -v wine >/dev/null 2>&1; then
-      echo "Using Wine: $_wiscc ${extra[*]}" >&2
-      (cd "${ROOT}/installer" && wine "$_wiscc" "${extra[@]}" LiveVocoderCppMinimal.iss)
-    else
-      echo "ISCC.exe not found. Install Inno Setup 6 (64-bit → \"Program Files\", 32-bit → \"Program Files (x86)\") under Wine, or use Windows/Git Bash. See installer/README-LINUX.txt" >&2
-      return 1
-    fi
+    echo "ISCC.exe not found. Install Inno Setup 6 (64-bit → \"Program Files\", 32-bit → \"Program Files (x86)\") under Wine, or use Windows/Git Bash. See installer/README-LINUX.txt" >&2
+    return 1
   fi
 }
 
 if [[ -n "$iscc" ]]; then
   run_iscc
+elif [[ -n "$_wine_iscc" ]]; then
+  run_iscc
 else
-  _wp="${WINEPREFIX:-$HOME/.wine}"
-  _wiscc=""
-  for _sub in \
-    "Program Files (x86)/Inno Setup 6/ISCC.exe" \
-    "Program Files/Inno Setup 6/ISCC.exe"; do
-    if [[ -f "$_wp/drive_c/$_sub" ]]; then
-      _wiscc="$_wp/drive_c/$_sub"
-      break
-    fi
-  done
-  if [[ -n "$_wiscc" ]] && command -v wine >/dev/null 2>&1; then
-    iscc=""
-    run_iscc
-  else
-    echo "ISCC.exe not found. Install Inno Setup 6 (64-bit → \"Program Files\", 32-bit → \"Program Files (x86)\") under Wine, or use Windows/Git Bash. See installer/README-LINUX.txt" >&2
-    exit 1
-  fi
+  echo "ISCC.exe not found. Install Inno Setup 6 (64-bit → \"Program Files\", 32-bit → \"Program Files (x86)\") under Wine, or use Windows/Git Bash. See installer/README-LINUX.txt" >&2
+  exit 1
 fi
 
 echo "Installer output:"
