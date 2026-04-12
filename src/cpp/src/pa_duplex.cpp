@@ -134,8 +134,12 @@ static PaDeviceIndex lv_wine_pick_pulseaudio_duplex_device(bool want_output) {
     return best;
 }
 
-/** Native Windows: VB-Audio Virtual Cable playback endpoint (CABLE Input). Prefer WASAPI when duplicated. */
-static PaDeviceIndex lv_native_windows_pick_vb_cable_output_device(PaDeviceIndex n_dev) {
+/**
+ * Native Windows: VB-Audio Virtual Cable playback (CABLE Input). Prefer WASAPI when duplicated.
+ * If only_host_api >= 0, only consider devices on that API (duplex streams cannot mix MME + WASAPI, etc.).
+ */
+static PaDeviceIndex lv_native_windows_pick_vb_cable_output_device_filtered(PaDeviceIndex n_dev,
+                                                                            PaHostApiIndex only_host_api) {
     PaDeviceIndex best_named = paNoDevice;
     int best_named_score = -1;
     PaDeviceIndex any_vb = paNoDevice;
@@ -143,6 +147,9 @@ static PaDeviceIndex lv_native_windows_pick_vb_cable_output_device(PaDeviceIndex
     for (PaDeviceIndex i = 0; i < n_dev; ++i) {
         const PaDeviceInfo* inf = Pa_GetDeviceInfo(i);
         if (inf == nullptr || inf->name == nullptr || inf->maxOutputChannels < 2) {
+            continue;
+        }
+        if (only_host_api >= 0 && inf->hostApi != only_host_api) {
             continue;
         }
         const char* nm = inf->name;
@@ -165,6 +172,38 @@ static PaDeviceIndex lv_native_windows_pick_vb_cable_output_device(PaDeviceIndex
         }
     }
     return (best_named >= 0) ? best_named : any_vb;
+}
+
+static PaDeviceIndex lv_native_windows_pick_vb_cable_output_device(PaDeviceIndex n_dev) {
+    return lv_native_windows_pick_vb_cable_output_device_filtered(n_dev, static_cast<PaHostApiIndex>(-1));
+}
+
+/** Microphone on a specific host API (for duplex alignment). Skips VB-Audio *capture* of cable output. */
+static PaDeviceIndex lv_native_windows_pick_input_on_host(PaDeviceIndex n_dev, PaHostApiIndex api_ix) {
+    if (api_ix < 0) {
+        return paNoDevice;
+    }
+    const PaHostApiInfo* pa = Pa_GetHostApiInfo(api_ix);
+    if (pa != nullptr && pa->defaultInputDevice >= 0) {
+        const PaDeviceInfo* di = Pa_GetDeviceInfo(pa->defaultInputDevice);
+        if (di != nullptr && di->hostApi == api_ix && di->maxInputChannels >= 1 && di->name != nullptr) {
+            const bool vb_cap = lv_win32_pa_name_hints_vb_virtual_cable(di->name) && lv_ci_hay_contains(di->name, "output");
+            if (!vb_cap) {
+                return pa->defaultInputDevice;
+            }
+        }
+    }
+    for (PaDeviceIndex i = 0; i < n_dev; ++i) {
+        const PaDeviceInfo* inf = Pa_GetDeviceInfo(i);
+        if (inf == nullptr || inf->name == nullptr || inf->hostApi != api_ix || inf->maxInputChannels < 1) {
+            continue;
+        }
+        if (lv_win32_pa_name_hints_vb_virtual_cable(inf->name) && lv_ci_hay_contains(inf->name, "output")) {
+            continue;
+        }
+        return i;
+    }
+    return paNoDevice;
 }
 #endif
 
@@ -293,6 +332,70 @@ int parse_device_index_env(const char* name) {
     }
     return static_cast<int>(x);
 }
+
+#if defined(_WIN32)
+/** PortAudio rejects one duplex stream when input and output use different Windows host APIs (e.g. MME + WASAPI). */
+static void lv_win32_align_duplex_devices_native(PaDeviceIndex& in_dev, PaDeviceIndex& out_dev) {
+    if (lv_windows_is_wine_host()) {
+        return;
+    }
+    const int n_raw = Pa_GetDeviceCount();
+    if (n_raw <= 0 || in_dev < 0 || out_dev < 0) {
+        return;
+    }
+    const PaDeviceIndex n_dev = static_cast<PaDeviceIndex>(n_raw);
+    const PaDeviceInfo* ii = Pa_GetDeviceInfo(in_dev);
+    const PaDeviceInfo* oi = Pa_GetDeviceInfo(out_dev);
+    if (ii == nullptr || oi == nullptr || ii->hostApi == oi->hostApi) {
+        return;
+    }
+    if (parse_device_index_env("LIVE_VOCODER_PA_INPUT_INDEX") >= 0 ||
+        parse_device_index_env("LIVE_VOCODER_PA_OUTPUT_INDEX") >= 0) {
+        return;
+    }
+    const char* in_sub = std::getenv("LIVE_VOCODER_PA_INPUT");
+    const char* out_sub = std::getenv("LIVE_VOCODER_PA_OUTPUT");
+    if ((in_sub != nullptr && in_sub[0] != '\0') || (out_sub != nullptr && out_sub[0] != '\0')) {
+        return;
+    }
+
+    const PaHostApiIndex in_api = ii->hostApi;
+    const PaHostApiIndex out_api = oi->hostApi;
+    const PaDeviceIndex alt_out = lv_native_windows_pick_vb_cable_output_device_filtered(n_dev, in_api);
+    if (alt_out >= 0) {
+        static bool logged_match_out = false;
+        if (!logged_match_out) {
+            logged_match_out = true;
+            const PaHostApiInfo* ai = Pa_GetHostApiInfo(in_api);
+            std::fprintf(stderr,
+                         "[LiveVocoder] Native Windows: microphone and VB-Cable used different PortAudio host APIs "
+                         "(illegal duplex). Using CABLE Input on the same API as the mic [%s].\n",
+                         ai != nullptr && ai->name != nullptr ? ai->name : "?");
+        }
+        out_dev = alt_out;
+        return;
+    }
+    const PaDeviceIndex alt_in = lv_native_windows_pick_input_on_host(n_dev, out_api);
+    if (alt_in >= 0) {
+        static bool logged_match_in = false;
+        if (!logged_match_in) {
+            logged_match_in = true;
+            const PaHostApiInfo* ao = Pa_GetHostApiInfo(out_api);
+            std::fprintf(stderr,
+                         "[LiveVocoder] Native Windows: microphone and VB-Cable used different PortAudio host APIs "
+                         "(illegal duplex). Using a microphone on the same API as CABLE Input [%s].\n",
+                         ao != nullptr && ao->name != nullptr ? ao->name : "?");
+        }
+        in_dev = alt_in;
+        return;
+    }
+    std::fprintf(stderr,
+                 "[LiveVocoder] Native Windows: input/output are on different PortAudio host APIs and no aligned pair "
+                 "was found — open may fail with \"Illegal combination\". Install VB-Cable for every listed API or set "
+                 "LIVE_VOCODER_PA_INPUT / LIVE_VOCODER_PA_OUTPUT to names from the same API "
+                 "(LIVE_VOCODER_PA_LIST_DEVICES=1).\n");
+}
+#endif
 
 PaDeviceIndex pick_input_device() {
     const int n_dev = Pa_GetDeviceCount();
@@ -602,8 +705,11 @@ void pa_log_all_devices_if_requested(FILE* out) {
 
 PaError pa_open_livevocoder_duplex(PaStream** stream, double sample_rate, unsigned long hop,
                                    PaStreamCallback callback, void* user_data) {
-    const PaDeviceIndex in_dev = pick_input_device();
-    const PaDeviceIndex out_dev = pick_output_device();
+    PaDeviceIndex in_dev = pick_input_device();
+    PaDeviceIndex out_dev = pick_output_device();
+#if defined(_WIN32)
+    lv_win32_align_duplex_devices_native(in_dev, out_dev);
+#endif
     if (in_dev < 0) {
         return paInvalidDevice;
     }
@@ -611,28 +717,56 @@ PaError pa_open_livevocoder_duplex(PaStream** stream, double sample_rate, unsign
         return paInvalidDevice;
     }
 
-    const PaDeviceInfo* in_inf = Pa_GetDeviceInfo(in_dev);
-    const PaDeviceInfo* out_inf = Pa_GetDeviceInfo(out_dev);
-    if (in_inf == nullptr || out_inf == nullptr || in_inf->maxInputChannels < 1 ||
-        out_inf->maxOutputChannels < 2) {
-        return paInvalidDevice;
+    const auto open_pair = [&](PaDeviceIndex id, PaDeviceIndex od) -> PaError {
+        const PaDeviceInfo* ii = Pa_GetDeviceInfo(id);
+        const PaDeviceInfo* oi = Pa_GetDeviceInfo(od);
+        if (ii == nullptr || oi == nullptr || ii->maxInputChannels < 1 || oi->maxOutputChannels < 2) {
+            return paInvalidDevice;
+        }
+        PaStreamParameters inp{};
+        inp.device = id;
+        inp.channelCount = 1;
+        inp.sampleFormat = paFloat32;
+        inp.suggestedLatency = ii->defaultLowInputLatency;
+        inp.hostApiSpecificStreamInfo = nullptr;
+        PaStreamParameters outp{};
+        outp.device = od;
+        outp.channelCount = 2;
+        outp.sampleFormat = paFloat32;
+        outp.suggestedLatency = oi->defaultLowOutputLatency;
+        outp.hostApiSpecificStreamInfo = nullptr;
+        return Pa_OpenStream(stream, &inp, &outp, sample_rate, hop, paNoFlag, callback, user_data);
+    };
+
+    PaError e = open_pair(in_dev, out_dev);
+#if defined(_WIN32)
+    if (e == paBadIODeviceCombination && !lv_windows_is_wine_host()) {
+        const PaHostApiIndex dh = Pa_GetDefaultHostApi();
+        if (dh >= 0) {
+            const PaHostApiInfo* hai = Pa_GetHostApiInfo(dh);
+            if (hai != nullptr && hai->defaultInputDevice >= 0 && hai->defaultOutputDevice >= 0) {
+                const PaDeviceInfo* di = Pa_GetDeviceInfo(hai->defaultInputDevice);
+                const PaDeviceInfo* dout = Pa_GetDeviceInfo(hai->defaultOutputDevice);
+                if (di != nullptr && dout != nullptr && di->maxInputChannels >= 1 && dout->maxOutputChannels >= 2 &&
+                    di->hostApi == dout->hostApi) {
+                    static bool logged_fb = false;
+                    if (!logged_fb) {
+                        logged_fb = true;
+                        std::fprintf(stderr,
+                                     "[LiveVocoder] Native Windows: retrying duplex on default host API [%s] after "
+                                     "illegal I/O device combination.\n",
+                                     hai->name != nullptr ? hai->name : "?");
+                    }
+                    const PaError e2 = open_pair(hai->defaultInputDevice, hai->defaultOutputDevice);
+                    if (e2 == paNoError) {
+                        g_duplex_out_dev = hai->defaultOutputDevice;
+                        return paNoError;
+                    }
+                }
+            }
+        }
     }
-
-    PaStreamParameters inp{};
-    inp.device = in_dev;
-    inp.channelCount = 1;
-    inp.sampleFormat = paFloat32;
-    inp.suggestedLatency = in_inf->defaultLowInputLatency;
-    inp.hostApiSpecificStreamInfo = nullptr;
-
-    PaStreamParameters outp{};
-    outp.device = out_dev;
-    outp.channelCount = 2;
-    outp.sampleFormat = paFloat32;
-    outp.suggestedLatency = out_inf->defaultLowOutputLatency;
-    outp.hostApiSpecificStreamInfo = nullptr;
-
-    const PaError e = Pa_OpenStream(stream, &inp, &outp, sample_rate, hop, paNoFlag, callback, user_data);
+#endif
     if (e == paNoError) {
         g_duplex_out_dev = out_dev;
     } else {
