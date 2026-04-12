@@ -734,33 +734,34 @@ PaError pa_open_livevocoder_duplex(PaStream** stream, double sample_rate, unsign
         outp.sampleFormat = paFloat32;
         outp.hostApiSpecificStreamInfo = nullptr;
 #if defined(_WIN32)
-        /* VB-Cable: we default to low PortAudio latency (tighter monitoring). Opt into high buffers if
-           VB control panel shows Pull loss: LIVE_VOCODER_PA_HIGH_LATENCY=1. */
+        /* VB-Audio Virtual Cable: high suggested latency can reach ~seconds of delay on some hosts.
+           Default to low latency; opt into large buffers if VB control panel shows pull loss. */
         const bool vb_duplex = !lv_windows_is_wine_host() &&
                                (lv_win32_pa_name_hints_vb_virtual_cable(ii->name) ||
                                 lv_win32_pa_name_hints_vb_virtual_cable(oi->name));
         const bool force_low = env_truthy(std::getenv("LIVE_VOCODER_PA_LOW_LATENCY")) ||
                                env_truthy(std::getenv("LIVE_VOCODER_LIVE_MONITORING"));
-        const bool prefer_high = vb_duplex && env_truthy(std::getenv("LIVE_VOCODER_PA_HIGH_LATENCY"));
-        const bool use_high = prefer_high && !force_low;
+        const bool force_high = env_truthy(std::getenv("LIVE_VOCODER_PA_HIGH_LATENCY")) ||
+                               env_truthy(std::getenv("LIVE_VOCODER_VB_HIGH_LATENCY"));
+        const bool use_high = vb_duplex && force_high && !force_low;
         if (use_high) {
             static bool logged = false;
             if (!logged) {
                 logged = true;
                 std::fprintf(stderr,
-                             "[LiveVocoder] VB-Cable duplex: PortAudio high suggested latency "
-                             "(LIVE_VOCODER_PA_HIGH_LATENCY=1; fewer pull underruns, more delay).\n");
+                             "[LiveVocoder] VB-Cable duplex: PortAudio high suggested latency (LIVE_VOCODER_PA_HIGH_LATENCY) "
+                             "— wider buffers, may add noticeable delay.\n");
             }
             inp.suggestedLatency = ii->defaultHighInputLatency;
             outp.suggestedLatency = oi->defaultHighOutputLatency;
         } else {
-            if (vb_duplex) {
-                static bool logged_low = false;
-                if (!logged_low) {
-                    logged_low = true;
+            if (vb_duplex && !force_low) {
+                static bool logged_lo = false;
+                if (!logged_lo) {
+                    logged_lo = true;
                     std::fprintf(stderr,
-                                 "[LiveVocoder] VB-Cable duplex: low PortAudio latency. If Pull loss climbs, set "
-                                 "LIVE_VOCODER_PA_HIGH_LATENCY=1.\n");
+                                 "[LiveVocoder] VB-Cable duplex: low PortAudio latency by default. If VB-Cable shows pull "
+                                 "loss, set LIVE_VOCODER_PA_HIGH_LATENCY=1 (or LIVE_VOCODER_VB_HIGH_LATENCY=1).\n");
                 }
             }
             inp.suggestedLatency = ii->defaultLowInputLatency;

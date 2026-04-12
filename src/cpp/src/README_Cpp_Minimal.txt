@@ -197,10 +197,11 @@ Windows backends (e.g. **MME** vs **WASAPI**). Current builds auto-pick **VB-Cab
 mic**, or a **mic on the same API as CABLE Input**; you can still force a matching pair with
 ``LIVE_VOCODER_PA_INPUT`` / ``LIVE_VOCODER_PA_OUTPUT`` substrings from the same API column in the device list.
 
-**VB-Cable duplex** uses **low** PortAudio suggested latency by default (tighter monitoring). If **VB-Audio’s
-control panel** shows **Pull loss** climbing, set ``LIVE_VOCODER_PA_HIGH_LATENCY=1`` before starting the app
-for **larger** PortAudio buffers (more delay, fewer underruns). ``LIVE_VOCODER_PA_LOW_LATENCY=1`` and
-``LIVE_VOCODER_LIVE_MONITORING=1`` still force low latency and override a high-latency request.
+**VB-Cable duplex** uses **low** PortAudio suggested latency by default (tighter monitoring; avoids multi‑second
+delays some hosts saw with large buffers). If **VB-Audio’s control panel** shows **Pull loss** climbing, set
+``LIVE_VOCODER_PA_HIGH_LATENCY=1`` or ``LIVE_VOCODER_VB_HIGH_LATENCY=1`` for **larger** PortAudio buffers
+(more delay, fewer underruns). ``LIVE_VOCODER_PA_LOW_LATENCY=1`` and ``LIVE_VOCODER_LIVE_MONITORING=1`` still
+force low latency and override a high-latency request.
 
 **Lower monitoring delay (live feel):** ``LIVE_VOCODER_LIVE_MONITORING=1`` also selects a **256-sample**
 PortAudio hop (~5.3 ms @ 48 kHz). On native Windows, **256-sample hops** are already the default unless

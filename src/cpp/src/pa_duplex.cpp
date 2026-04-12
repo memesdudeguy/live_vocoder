@@ -741,7 +741,9 @@ PaError pa_open_livevocoder_duplex(PaStream** stream, double sample_rate, unsign
                                 lv_win32_pa_name_hints_vb_virtual_cable(oi->name));
         const bool force_low = env_truthy(std::getenv("LIVE_VOCODER_PA_LOW_LATENCY")) ||
                                env_truthy(std::getenv("LIVE_VOCODER_LIVE_MONITORING"));
-        const bool prefer_high = vb_duplex && env_truthy(std::getenv("LIVE_VOCODER_PA_HIGH_LATENCY"));
+        const bool prefer_high =
+            vb_duplex && (env_truthy(std::getenv("LIVE_VOCODER_PA_HIGH_LATENCY")) ||
+                          env_truthy(std::getenv("LIVE_VOCODER_VB_HIGH_LATENCY")));
         const bool use_high = prefer_high && !force_low;
         if (use_high) {
             static bool logged = false;
@@ -749,7 +751,7 @@ PaError pa_open_livevocoder_duplex(PaStream** stream, double sample_rate, unsign
                 logged = true;
                 std::fprintf(stderr,
                              "[LiveVocoder] VB-Cable duplex: PortAudio high suggested latency "
-                             "(LIVE_VOCODER_PA_HIGH_LATENCY=1; fewer pull underruns, more delay).\n");
+                             "(LIVE_VOCODER_PA_HIGH_LATENCY / LIVE_VOCODER_VB_HIGH_LATENCY; fewer pull underruns, more delay).\n");
             }
             inp.suggestedLatency = ii->defaultHighInputLatency;
             outp.suggestedLatency = oi->defaultHighOutputLatency;
