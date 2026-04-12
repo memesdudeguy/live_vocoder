@@ -36,3 +36,7 @@ Edit `app/build.gradle.kts` (`versionCode`, `versionName`) and `app/src/main/res
 ## Virtual audio
 
 The APK surfaces the same ideas as the desktop README: Android has no system-wide virtual cable like VB‑Audio. `RECORD_AUDIO` is declared for a future on-device vocoder; see `strings.xml` (`virtual_audio_body`) and the **Virtual audio on Android** section in the UI.
+
+## APK updates (GitHub)
+
+**Check for APK update** calls GitHub’s `releases/latest` API for `memesdudeguy/live_vocoder`, finds a `.apk` asset (prefers names containing `LiveVocoder`), compares the release tag to `versionName`, then downloads and opens the package installer. Android 8+ may require **Install unknown apps** for this package. Forks: change `GithubApkUpdate.REPO` in `GithubApkUpdate.kt`. Same `versionName` with a newer APK on GitHub will still show “up to date” — bump `versionName` (or extend the checker) for rebuild-only releases.
