@@ -166,6 +166,11 @@ List names once:
   set LIVE_VOCODER_PA_LIST_DEVICES=1
   then run LiveVocoder.exe from a Command Prompt and read the console output.
 
+If PortAudio reports **“Illegal combination of I/O devices”**, the mic and playback were on different
+Windows backends (e.g. **MME** vs **WASAPI**). Current builds auto-pick **VB-Cable on the same API as the
+mic**, or a **mic on the same API as CABLE Input**; you can still force a matching pair with
+``LIVE_VOCODER_PA_INPUT`` / ``LIVE_VOCODER_PA_OUTPUT`` substrings from the same API column in the device list.
+
 If fonts\DejaVuSans.ttf is missing, the UI still uses Segoe UI / Arial where available.
 
 
