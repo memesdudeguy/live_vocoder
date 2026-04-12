@@ -8,6 +8,11 @@ MON_NAME="${SINK_NAME}.monitor"
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 EXE="$SCRIPT_DIR/LiveVocoder.exe"
 if [ ! -f "$EXE" ]; then echo "LiveVocoder.exe not found: $EXE" >&2; exit 1; fi
+# macOS: CoreAudio only — no host PipeWire/pactl stack (see installer/README_Wine_macOS.txt).
+if [ "$(uname -s)" = "Darwin" ]; then
+  export LIVE_VOCODER_SDL_SKIP_STARTUP_MODALS="${LIVE_VOCODER_SDL_SKIP_STARTUP_MODALS:-1}"
+  exec wine "$EXE" "$@"
+fi
 if command -v pactl >/dev/null 2>&1; then
   pactl list modules short 2>/dev/null | awk '$2 ~ /loopback/ && index($0,"live_vocoder.monitor"){print $1}' | while read -r id; do [ -n "$id" ] && pactl unload-module "$id" 2>/dev/null || true; done
   pactl list modules short 2>/dev/null | awk '($2=="module-remap-source"||$2=="module-virtual-source")&&(/live_vocoder_mic/||/LiveVocoderVirtualMic/){print $1}' | while read -r id; do [ -n "$id" ] && pactl unload-module "$id" 2>/dev/null || true; done

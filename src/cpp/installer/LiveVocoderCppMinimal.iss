@@ -5,7 +5,7 @@
 ; https://jrsoftware.org/isinfo.php
 
 #define MyAppName "Live Vocoder"
-#define MyAppVersion "6.0"
+#define MyAppVersion "7.0"
 #define MyAppPublisher "memesdudeguy"
 #define MyAppExeName "LiveVocoder.exe"
 #define MyOutputBase "LiveVocoder-Setup"
@@ -89,6 +89,7 @@ Source: "{#MinimalRoot}\extras\*"; DestDir: "{app}\extras"; Flags: ignoreversion
 Source: "CarriersFolderReadme.txt"; DestDir: "{userdocs}\LiveVocoderCarriers"; DestName: "README.txt"; Flags: ignoreversion uninsneveruninstall
 ; Linux host notes — only when the installer itself runs under Wine (skipped on native Windows).
 Source: "README_Wine_Installer.txt"; DestDir: "{app}"; DestName: "README_Wine.txt"; Flags: ignoreversion skipifsourcedoesntexist; Check: IsRunningUnderWine
+Source: "README_Wine_macOS.txt"; DestDir: "{app}"; DestName: "README_Wine_macOS.txt"; Flags: ignoreversion skipifsourcedoesntexist; Check: IsRunningUnderWine
 ; Linux host helper for running this Windows installer under Wine only — not used on real Windows.
 Source: "sh-LiveVocoder-Setup.sh"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist; Check: IsRunningUnderWine
 #ifexist "..\dist-windows-installer-minimal\check-wine-livevocoder-host.sh"
@@ -218,6 +219,10 @@ begin
     'SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"' + #10 +
     'EXE="$SCRIPT_DIR/LiveVocoder.exe"' + #10 +
     'if [ ! -f "$EXE" ]; then echo "LiveVocoder.exe not found: $EXE" >&2; exit 1; fi' + #10 +
+    'if [ "$(uname -s)" = "Darwin" ]; then' + #10 +
+    '  export LIVE_VOCODER_SDL_SKIP_STARTUP_MODALS="${LIVE_VOCODER_SDL_SKIP_STARTUP_MODALS:-1}"' + #10 +
+    '  exec wine "$EXE" "$@"' + #10 +
+    'fi' + #10 +
     'if command -v pactl >/dev/null 2>&1; then' + #10 +
     '  # Purge all LiveVocoder PipeWire modules (duplicates + canonical), then recreate one stack below.' + #10 +
     '  pactl list modules short 2>/dev/null | awk ''$2 ~ /loopback/ && index($0,"live_vocoder.monitor"){print $1}'' | while read -r id; do [ -n "$id" ] && pactl unload-module "$id" 2>/dev/null || true; done' + #10 +

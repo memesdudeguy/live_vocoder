@@ -212,7 +212,7 @@ long long parse_github_time_utc(const std::string& iso) {
     return days * 86400LL + h * 3600LL + mi * 60LL + se;
 }
 
-// Parse tag_name like "v6.0" or "6.0.1" → compare to app version.
+// Parse tag_name like "v7.0" or "7.0.1" → compare to app version.
 bool tag_newer_than_app(const std::string& tag) {
     std::string t = tag;
     while (!t.empty() && (t[0] == 'v' || t[0] == 'V')) t.erase(t.begin());
@@ -387,7 +387,7 @@ bool live_vocoder_download_and_run_installer(const char* https_url, std::string&
     }
 
     INTERNET_PORT port = INTERNET_DEFAULT_HTTPS_PORT;
-    const wchar_t* ua = L"LiveVocoder/6.0 (download)";
+    const wchar_t* ua = L"LiveVocoder/7.0 (download)";
     std::string body, err;
     if (!http_get_utf8(whost.c_str(), port, true, wpath.c_str(), ua, body, err)) {
         err_out = err.empty() ? "download failed" : err;

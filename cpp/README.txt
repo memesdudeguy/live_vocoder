@@ -18,7 +18,7 @@ Do not run ``cmake -B build .`` from inside ``cpp/build`` (that nests a wrong bu
 **Inno Setup .exe:** Installers are built **only on Windows** with ISCC (or Wine + Inno on Linux).
 On Linux, ``cmake --build … --target inno_installer`` does not write under ``dist-installer/``.
 Full portable tree: ``LiveVocoder_Setup_*.exe`` (``installer/LiveVocoder.iss``).
-**Minimal C++ only** (exe + DLLs, no Python): ``LiveVocoder-Setup.exe`` (Windows and Wine) via
+**Minimal C++ only** (exe + DLLs, no Python): ``LiveVocoder-Setup.exe`` (Windows, **Wine on Linux/macOS**) via
 ``build-installer-minimal.sh`` / ``build-installer-minimal.bat`` and ``installer/LiveVocoderCppMinimal.iss`` (single ISCC pass → ``LiveVocoder-Setup.exe``; Wine-only steps use ``Check: IsRunningUnderWine``).
 Download artifact **LiveVocoder-setup** from GitHub Actions, or read ``cpp/installer/README-LINUX.txt``.
 
@@ -52,6 +52,8 @@ PortAudio often sees ALSA names; list and pick output by substring::
   LIVE_VOCODER_PA_INPUT=HyperX ./LiveVocoder.exe   # optional mic match
 
 Use ``LIVE_VOCODER_PA_OUTPUT_INDEX=N`` / ``LIVE_VOCODER_PA_INPUT_INDEX=N`` if you prefer indices from the list. Output device must expose **at least 2 playback channels** (stereo).
+
+**Wine .exe + OBS on macOS:** VB-Cable is Windows-only. Install **BlackHole 2ch**, create a **Multi-Output Device** in Audio MIDI Setup (built-in + BlackHole), set it as system output, then capture **BlackHole** in OBS. Use ``LIVE_VOCODER_PA_LIST_DEVICES=1`` / ``LIVE_VOCODER_PA_OUTPUT=BlackHole`` if needed. See ``cpp/installer/README_Wine_macOS.txt`` (also installed next to the app under Wine).
 
 **Wine .exe + OBS on Linux:** The MinGW ``LiveVocoder.exe`` under Wine sends audio to the **host default** Pulse/PipeWire sink unless you override it. If OBS uses **``live_vocoder*_mic``**, that source only carries audio when something plays into the matching **null sink** — **Wine does not do that automatically**. Fix one of:
   - Start Wine/CrossOver with **``PULSE_SINK=live_vocoder2``** (match your sink name from ``pactl list short sinks``), **or**

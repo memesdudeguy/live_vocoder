@@ -3,18 +3,18 @@ Live Vocoder — C++ SDL build (minimal installer)
 
 Made by memesdudeguy.
 
-Release 6.0 — ``build-installer-minimal.sh`` / ``.bat`` compile **one** minimal installer:
+Release 7.0 — ``build-installer-minimal.sh`` / ``.bat`` compile **one** minimal installer:
 
 - ``LiveVocoder-Setup.exe`` — use on **native Windows** or with **Wine** on Linux (Wine-only extras apply at install-time when the installer detects Wine).
   **ISCC** writes it to ``cpp/dist-installer/LiveVocoder-Setup.exe`` (relative to the repo). On the wizard **Finish**
   page (non-silent), the full path of the ``.exe`` you ran is shown, plus paths under ``extras\`` for
   ``VBCABLE_Setup_x64.exe`` and **``VBCABLE_ControlPanel.exe``** (VB-Audio’s own UI for debug).
 
-On GitHub Actions, workflow “Build C++ Windows EXE” uploads artifact ``LiveVocoder-Cpp-setup-v6.0`` with
+On GitHub Actions, workflow “Build C++ Windows EXE” uploads artifact ``LiveVocoder-Cpp-setup-v7.0`` with
 ``LiveVocoder-Setup.exe`` plus **Linux helpers** ``sh-LiveVocoder-Setup.sh`` and ``check-wine-livevocoder-host.sh``
 (keep them next to the ``.exe``; run ``/bin/sh ./sh-LiveVocoder-Setup.sh`` to use ``~/.wine-livevocoder``, auto-``wineboot``,
 and a **wine32** check — avoids a broken ``~/.wine`` blocking setup).
-Pushing a tag matching ``v*`` attaches those files plus ``LiveVocoder_Setup_6.0.exe`` (full installer) to the Release.
+Pushing a tag matching ``v*`` attaches those files plus ``LiveVocoder_Setup_7.0.exe`` (full installer) to the Release.
 
 What you get
 ------------
@@ -131,7 +131,7 @@ Pre-converted .f32 carriers do not need ffmpeg.
 Troubleshooting carrier / ffmpeg
 ---------------------------------
 **Native Windows**
-- If the error mentions **Wine** but you are on real Windows, you are on an **old LiveVocoder.exe** — reinstall from this **6.0** setup so you get CreateProcess ffmpeg + fixed messages.
+- If the error mentions **Wine** but you are on real Windows, you are on an **old LiveVocoder.exe** — reinstall from this **7.0** setup so you get CreateProcess ffmpeg + fixed messages.
 - Confirm both files exist: ``dir "C:\Program Files\Live Vocoder\LiveVocoder.exe" "C:\Program Files\Live Vocoder\ffmpeg.exe"``
 - OneDrive: source audio must be **fully downloaded** (not cloud-only).
 - Set ``LIVE_VOCODER_FFMPEG`` (native Windows only; ignored under Wine) to a **full Windows path** to a known-good
@@ -139,7 +139,7 @@ Troubleshooting carrier / ffmpeg
 
 **Wine on Linux**
 - Use **Windows ffmpeg.exe** next to the app (the installer provides it). Do not point Wine at ``/usr/bin/ffmpeg``.
-- **6.0** runs that ffmpeg with the same **CreateProcess** path as real Windows (working directory next to ``ffmpeg.exe``, stderr captured). If conversion still fails, the dialog should show ffmpeg’s own error text — not an empty log.
+- **7.0** runs that ffmpeg with the same **CreateProcess** path as real Windows (working directory next to ``ffmpeg.exe``, stderr captured). If conversion still fails, the dialog should show ffmpeg’s own error text — not an empty log.
 - Prefer ``live-vocoder-wine-launch.sh`` or your distro’s launcher so ``PULSE_SINK`` / null sinks are set before ``wine``.
 - Carrier paths under ``Z:\`` are normal; the app keeps the Wine ffmpeg command path.
 - **QEMU test VM:** the host shares ``dist-installer`` as ``\\10.0.2.4\qemu``. Run ``LiveVocoder-Setup.exe`` (see ``Run-from-QEMU-share.bat``), install, then run **LiveVocoder.exe** from the Start menu or ``Program Files``.

@@ -1,9 +1,12 @@
 Live Vocoder — same installer on Linux (Wine) and Windows
 ==========================================================
 
-``LiveVocoder-Setup.exe`` is one build: use it on **native Windows** or run it with **Wine** on Linux.
-When the installer detects Wine, it adds PipeWire/Pulse env defaults, optional AppCompat Layers, the host
-``live-vocoder-wine-launch.sh``, ``README_Wine.txt``, and a ``.desktop`` entry.
+``LiveVocoder-Setup.exe`` is one build: use it on **native Windows** or run it with **Wine** on Linux or **macOS**.
+When the installer detects Wine, it adds PipeWire/Pulse env defaults (Linux), optional AppCompat Layers, the host
+``live-vocoder-wine-launch.sh``, ``README_Wine.txt``, ``README_Wine_macOS.txt``, and a ``.desktop`` entry (Linux).
+
+**macOS hosts:** VB-Cable is Windows-only — use **BlackHole** (or similar) for virtual audio. Read
+``README_Wine_macOS.txt`` after install. The launch script skips Linux ``pactl`` setup on Darwin.
 
 Debian / Ubuntu — install **32-bit Wine** (required for many WOW64 prefixes)
 -----------------------------------------------------------------------------
@@ -20,11 +23,23 @@ then enable **multiarch** and install **wine32** (not only ``wine64``)::
 
 If Wine already failed once, **remove the broken prefix** and recreate::
 
-  rm -rf ~/.wine
+  rm -rf ~/.wine-livevocoder ~/.wine
   WINEARCH=win64 wineboot -u
+
+The helper script ``sh-LiveVocoder-Setup.sh`` defaults to ``WINEPREFIX=$HOME/.wine-livevocoder`` and runs
+``wineboot`` automatically for a new prefix (so a bad ``~/.wine`` does not block install). Override with
+``LIVE_VOCODER_WINEPREFIX`` or ``export WINEPREFIX=...`` before running the script.
 
 Optional: from the Live Vocoder repo run ``scripts/check-wine-livevocoder-host.sh`` — it prints the same
 hints if ``wine32`` is missing.
+
+**Only downloaded the .exe?** Use the standalone runner (isolated prefix + ``wineboot``; pass your path)::
+
+  curl -sLO https://raw.githubusercontent.com/memesdudeguy/live_vocoder/main/scripts/wine-run-livevocoder-setup.sh
+  chmod +x wine-run-livevocoder-setup.sh
+  ./wine-run-livevocoder-setup.sh '/path/to/LiveVocoder-Setup(4).exe'
+
+You still need **wine32** installed (see above); the script reminds you if it looks missing.
 
 **Recommended on Linux:** keep ``LiveVocoder-Setup.exe``, ``sh-LiveVocoder-Setup.sh``, and
 ``check-wine-livevocoder-host.sh`` in the **same folder** (release zip / ``cpp/dist-installer/`` after build),
@@ -32,11 +47,11 @@ then run::
 
   /bin/sh ./sh-LiveVocoder-Setup.sh
 
-That checks **wine32** / multiarch and probes Wine **before** starting the installer. Raw::
+That initializes the prefix if needed, checks **wine32** / multiarch, then runs the installer. Raw::
 
   wine LiveVocoder-Setup.exe
 
-also works if Wine is already complete.
+also works if Wine is already complete (uses your current ``WINEPREFIX``, usually ``~/.wine``).
 
 Silent install (optional):
 

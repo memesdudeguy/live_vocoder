@@ -1,10 +1,10 @@
 # Native C++ vocoder: Windows PE .exe + MinGW DLLs (same folder runs on Windows and under Wine).
-# Artifacts (AppVersion 6.0 from installer scripts):
-#   - LiveVocoder-full-setup-v6.0 — full portable + Python (LiveVocoder_Setup_6.0.exe)
-#   - LiveVocoder-Cpp-setup-v6.0 — SDL-only minimal installers (Windows + Wine host)
+# Artifacts (AppVersion 7.0 from installer scripts):
+#   - LiveVocoder-full-setup-v7.0 — full portable + Python (LiveVocoder_Setup_7.0.exe)
+#   - LiveVocoder-Cpp-setup-v7.0 — SDL-only minimal installers (Windows + Wine host)
 #
 # Publish a GitHub Release (uploads both .exe): create and push a version tag, e.g.
-#   git tag v6.0 && git push origin v6.0
+#   git tag v7.0 && git push origin v7.0
 name: Build C++ Windows EXE
 
 on:
@@ -97,7 +97,7 @@ jobs:
           Get-ChildItem -Path $stage -File | ForEach-Object { Copy-Item -Force $_.FullName (Join-Path $dest $_.Name) }
           Write-Host "Bundled full VB-Cable driver pack into third_party/vbcable/ (VB-Audio donationware — see vb-audio.com/Cable/)."
 
-      - name: Minimal SDL installer payload (6.0)
+      - name: Minimal SDL installer payload (7.0)
         shell: msys2 {0}
         run: |
           set -euo pipefail
@@ -127,19 +127,19 @@ jobs:
       - name: Upload portable folder (exe + DLLs + Python for Wine / Windows)
         uses: actions/upload-artifact@v4
         with:
-          name: LiveVocoder-windows-v6.0
+          name: LiveVocoder-windows-v7.0
           path: cpp/dist-windows-cross/
 
-      - name: Upload full Inno Setup installer (6.0)
+      - name: Upload full Inno Setup installer (7.0)
         uses: actions/upload-artifact@v4
         with:
-          name: LiveVocoder-full-setup-v6.0
+          name: LiveVocoder-full-setup-v7.0
           path: cpp/dist-installer/LiveVocoder_Setup_*.exe
 
-      - name: Upload minimal C++ installers (6.0)
+      - name: Upload minimal C++ installers (7.0)
         uses: actions/upload-artifact@v4
         with:
-          name: LiveVocoder-Cpp-setup-v6.0
+          name: LiveVocoder-Cpp-setup-v7.0
           path: |
             cpp/dist-installer/LiveVocoder-Setup.exe
             cpp/dist-installer/sh-LiveVocoder-Setup.sh
@@ -158,17 +158,17 @@ jobs:
       - name: Download full installer artifact
         uses: actions/download-artifact@v4
         with:
-          name: LiveVocoder-full-setup-v6.0
+          name: LiveVocoder-full-setup-v7.0
           path: release-assets
 
       - name: Download minimal C++ installer artifact
         uses: actions/download-artifact@v4
         with:
-          name: LiveVocoder-Cpp-setup-v6.0
+          name: LiveVocoder-Cpp-setup-v7.0
           path: release-assets
 
       - name: Attach app icon for shortcuts / manual use
-        run: cp -f cpp/installer/LiveVocoder.ico release-assets/LiveVocoder-6.0.ico
+        run: cp -f cpp/installer/LiveVocoder.ico release-assets/LiveVocoder-7.0.ico
 
       - name: Create GitHub Release with installers
         uses: softprops/action-gh-release@v2
@@ -181,4 +181,4 @@ jobs:
             release-assets/LiveVocoder-Setup.exe
             release-assets/sh-LiveVocoder-Setup.sh
             release-assets/check-wine-livevocoder-host.sh
-            release-assets/LiveVocoder-6.0.ico
+            release-assets/LiveVocoder-7.0.ico

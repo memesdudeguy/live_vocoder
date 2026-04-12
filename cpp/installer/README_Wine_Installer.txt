@@ -1,9 +1,12 @@
 Live Vocoder — same installer on Linux (Wine) and Windows
 ==========================================================
 
-``LiveVocoder-Setup.exe`` is one build: use it on **native Windows** or run it with **Wine** on Linux.
-When the installer detects Wine, it adds PipeWire/Pulse env defaults, optional AppCompat Layers, the host
-``live-vocoder-wine-launch.sh``, ``README_Wine.txt``, and a ``.desktop`` entry.
+``LiveVocoder-Setup.exe`` is one build: use it on **native Windows** or run it with **Wine** on Linux or **macOS**.
+When the installer detects Wine, it adds PipeWire/Pulse env defaults (Linux), optional AppCompat Layers, the host
+``live-vocoder-wine-launch.sh``, ``README_Wine.txt``, ``README_Wine_macOS.txt``, and a ``.desktop`` entry (Linux).
+
+**macOS hosts:** VB-Cable is Windows-only — use **BlackHole** (or similar) for virtual audio. Read
+``README_Wine_macOS.txt`` after install. The launch script skips Linux ``pactl`` setup on Darwin.
 
 Debian / Ubuntu — install **32-bit Wine** (required for many WOW64 prefixes)
 -----------------------------------------------------------------------------
