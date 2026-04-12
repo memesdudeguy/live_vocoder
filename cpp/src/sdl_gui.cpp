@@ -10,9 +10,6 @@
 
 #define SDL_MAIN_HANDLED
 #include <SDL.h>
-#if defined(_WIN32)
-#include <SDL_syswm.h>
-#endif
 #include <SDL_ttf.h>
 
 #include <portaudio.h>
@@ -100,31 +97,51 @@ static std::wstring win32_utf8_to_wide(const char* s) {
         return std::wstring();
     return out;
 }
+
+static bool win32_is_wine_host() {
+    HMODULE ntdll = GetModuleHandleW(L"ntdll.dll");
+    if (ntdll == nullptr)
+        return false;
+    return GetProcAddress(ntdll, "wine_get_version") != nullptr;
+}
+
+/** Wine: MessageBoxW often draws a frameless panel with no OK; log full text and use SDL simple box. */
+static void sdl_show_modal_wine(Uint32 flags, const char* title, const char* message) {
+    const char* t = title != nullptr ? title : "";
+    const char* m = message != nullptr ? message : "";
+    std::fprintf(stderr, "%s\n\n%s\n\n", t, m);
+    std::string body(m);
+    constexpr size_t kMaxDlg = 700;
+    if (body.size() > kMaxDlg) {
+        body.resize(kMaxDlg);
+        body += "\n\n…(truncated; full text above in this terminal)…";
+    }
+    (void)SDL_ShowSimpleMessageBox(flags, t, body.c_str(), nullptr);
+}
 #endif
 
 /**
  * OS message box with a single OK. Linux uses SDL custom colors. Windows uses native MessageBoxW — SDL's Win32
  * implementation has shown dialogs with no visible OK / no close on VMware and similar setups.
+ * Never use the SDL HWND as MessageBox owner (breaks layout with GL/Vulkan parents). Under Wine, avoid MessageBoxW.
  */
 void sdl_show_themed_message_box(Uint32 flags, const char* title, const char* message, SDL_Window* window) {
 #if defined(_WIN32)
+    (void)window;
+    if (win32_is_wine_host()) {
+        sdl_show_modal_wine(flags, title, message);
+        return;
+    }
     std::wstring wtitle = win32_utf8_to_wide(title != nullptr ? title : "");
     std::wstring wmsg = win32_utf8_to_wide(message != nullptr ? message : "");
-    UINT mb = MB_OK;
+    UINT mb = MB_OK | MB_SETFOREGROUND;
     if ((flags & SDL_MESSAGEBOX_ERROR) != 0)
         mb |= MB_ICONERROR;
     else if ((flags & SDL_MESSAGEBOX_WARNING) != 0)
         mb |= MB_ICONWARNING;
     else
         mb |= MB_ICONINFORMATION;
-    HWND owner = nullptr;
-    if (window != nullptr) {
-        SDL_SysWMinfo wm{};
-        SDL_VERSION(&wm.version);
-        if (SDL_GetWindowWMInfo(window, &wm))
-            owner = wm.info.win.window;
-    }
-    MessageBoxW(owner, wmsg.c_str(), wtitle.c_str(), mb);
+    MessageBoxW(nullptr, wmsg.c_str(), wtitle.c_str(), mb);
     return;
 #else
     SDL_MessageBoxButtonData button{};
@@ -1297,11 +1314,9 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
     if (fonts_ok) {
 #if defined(_WIN32)
         const char* kMonitorHelp =
-            "Windows + VB-Cable: PortAudio plays to one device only. When that is CABLE Input, sound goes into the "
-            "cable for OBS/Discord (mic = CABLE Output) — not to your headphones. To hear yourself: Sound settings → "
-            "CABLE Output → Listen → choose your speakers; or set LIVE_VOCODER_DISABLE_VB_CABLE=1 and "
-            "LIVE_VOCODER_PA_OUTPUT to your real speakers (then send game/chat audio to the cable another way). "
-            "Monitor off + non-virtual output silences playback. LIST_DEVICES=1 lists PortAudio names.";
+            "VB-Cable: playback targets one device. CABLE Input → OBS/Discord use mic CABLE Output (not headphones). "
+            "Hear yourself: Sound → CABLE Output → Listen → your speakers. Or LIVE_VOCODER_DISABLE_VB_CABLE=1 and set "
+            "PA output to real speakers. ? / Help in-app for more. LIST_DEVICES=1 lists PortAudio names.";
 #else
         const char* kMonitorHelp =
             "Monitor on/off: silences local playback when off (including PipeWire default output). "
@@ -1309,11 +1324,9 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
             "Monitor on adds a loopback from that sink’s monitor to your default speakers.";
 #endif
         const std::string welcome =
-            std::string("Drop any audio file (or .f32) — it is converted with ffmpeg to mono 48 kHz f32le and "
-                        "saved under Documents/LiveVocoderCarriers (same as GTK).\n"
-                        "Or click Library… in the voice card to choose a file already in that folder.\n"
-                        "Or place carrier.f32 there / next to the app. Needs ffmpeg on PATH for non-.f32.\n"
-                        "Clean mic needs no carrier.\n\n") +
+            std::string("Drop audio or .f32 → ffmpeg converts to mono 48 kHz f32le in Documents/LiveVocoderCarriers.\n"
+                        "Library… picks from that folder; carrier.f32 there or next to the app works. "
+                        "ffmpeg on PATH for non-.f32. Clean mic: no carrier.\n\n") +
             kMonitorHelp + "\n\n— memesdudeguy";
         if (!sdl_skip_startup_modals()) {
             sdl_show_themed_message_box(SDL_MESSAGEBOX_INFORMATION, "Live Vocoder", welcome.c_str(), window);
