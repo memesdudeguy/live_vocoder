@@ -197,15 +197,18 @@ Windows backends (e.g. **MME** vs **WASAPI**). Current builds auto-pick **VB-Cab
 mic**, or a **mic on the same API as CABLE Input**; you can still force a matching pair with
 ``LIVE_VOCODER_PA_INPUT`` / ``LIVE_VOCODER_PA_OUTPUT`` substrings from the same API column in the device list.
 
-If **VB-Audio’s control panel** shows **Pull loss** climbing while Live Vocoder runs, the app uses **higher
-PortAudio buffer latency** automatically when VB-Cable is in the duplex pair (reduces underruns). To force
-the old low-latency defaults: ``LIVE_VOCODER_PA_LOW_LATENCY=1``.
+**VB-Cable duplex** uses **low** PortAudio suggested latency by default (tighter monitoring). If **VB-Audio’s
+control panel** shows **Pull loss** climbing, set ``LIVE_VOCODER_PA_HIGH_LATENCY=1`` before starting the app
+for **larger** PortAudio buffers (more delay, fewer underruns). ``LIVE_VOCODER_PA_LOW_LATENCY=1`` and
+``LIVE_VOCODER_LIVE_MONITORING=1`` still force low latency and override a high-latency request.
 
-**Lower monitoring delay (live feel):** set ``LIVE_VOCODER_LIVE_MONITORING=1`` before starting the app. That
-uses a **256-sample** PortAudio hop (~5.3 ms @ 48 kHz instead of ~10.7 ms) and **low** PortAudio suggested
-latency with VB-Cable (may increase **Pull loss** — raise VB buffer or clear if needed). Finer control:
-``LIVE_VOCODER_HOP`` = ``64``, ``128``, ``256``, or ``512`` (must divide 2048). Also lower **Latency (smp)**
-in **VB-Audio Virtual Cable** control panel if it is very high (e.g. 7168).
+**Lower monitoring delay (live feel):** ``LIVE_VOCODER_LIVE_MONITORING=1`` also selects a **256-sample**
+PortAudio hop (~5.3 ms @ 48 kHz). On native Windows, **256-sample hops** are already the default unless
+``LIVE_VOCODER_HIGH_LATENCY_HOP=1``. Finer control: ``LIVE_VOCODER_HOP`` = ``64``, ``128``, ``256``, or
+``512`` (must divide 2048). Lower **Latency (smp)** in **VB-Audio Virtual Cable** if it is very high (e.g. 7168).
+
+The vocoder uses a **2048-point STFT**; processed audio will still feel **later** than raw speech by tens of
+milliseconds — that is normal. For **lip-sync to camera**, use your recorder’s **audio sync offset** (e.g. OBS).
 
 If fonts\DejaVuSans.ttf is missing, the UI still uses Segoe UI / Arial where available.
 

@@ -118,8 +118,8 @@ static PaDeviceIndex pick_physical_speaker(PaDeviceIndex duplex_out) {
 
 static std::mutex g_q_mu;
 static std::deque<float> g_q;
-/* Cap queue so speaker monitor stays tight (~21 ms max @ 48 kHz stereo vs ~1 s before). */
-static constexpr std::size_t k_max_samples = 2048u;
+/* Cap queue so speaker monitor stays tight (~10.7 ms max @ 48 kHz stereo). */
+static constexpr std::size_t k_max_samples = 1024u;
 static std::atomic<bool> g_feed_armed{false};
 
 static int monitor_callback(const void*, void* output, unsigned long frames, const PaStreamCallbackTimeInfo*,
@@ -226,9 +226,7 @@ void pa_win32_monitor_output_feed(bool duplex_targets_virt_route, bool monitor_o
         interleaved_stereo_lr == nullptr || frames == 0) {
         return;
     }
-    if (!g_q_mu.try_lock()) {
-        return;
-    }
+    std::lock_guard<std::mutex> lock(g_q_mu);
     const std::size_t add = static_cast<std::size_t>(frames) * 2u;
     while (g_q.size() + add > k_max_samples && g_q.size() >= 2) {
         g_q.pop_front();
@@ -238,7 +236,6 @@ void pa_win32_monitor_output_feed(bool duplex_targets_virt_route, bool monitor_o
         g_q.push_back(interleaved_stereo_lr[i * 2]);
         g_q.push_back(interleaved_stereo_lr[i * 2 + 1]);
     }
-    g_q_mu.unlock();
 }
 
 #endif  // _WIN32
