@@ -5,5 +5,7 @@
     <string name="android_scope_body">This Android package is version 7.0 and matches the desktop release line. The full real-time vocoder (SDL, PortAudio, FFTW) runs on Windows, Linux, and macOS. An on-device audio engine for Android is not bundled here yet.</string>
     <string name="carrier_presets_title">Desktop carrier presets (7.0)</string>
     <string name="carrier_presets_body">In the Windows/Linux/macOS app, put these mono 48 kHz .f32 files in Documents/LiveVocoderCarriers (or use the shortcut chips):\n\n• Gangstas Paradise (Instrumental) (1).f32\n• Hide (CS01 Version).f32\n• Rick Astley - Never Gonna Give You Up (Official Video) (4K Remaster).f32</string>
+    <string name="virtual_audio_title">Virtual audio on Android</string>
+    <string name="virtual_audio_body">Android has no system-wide “virtual cable” like VB‑Cable on Windows. Apps use the mic (AudioRecord) and speakers (AudioTrack) or low-latency AAudio/Oboe.\n\nAndroid 10+ can capture other apps’ playback only when those apps allow it (AudioPlaybackCapture), often together with screen capture — not a generic loopback for every stream.\n\nFor routing to another device, use USB audio or Bluetooth. A future Live Vocoder engine here would use the mic permission and in-app processing — not a installable virtual driver.</string>
     <string name="open_releases">Open releases (downloads)</string>
 </resources>

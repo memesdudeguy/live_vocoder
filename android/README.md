@@ -19,7 +19,7 @@ export ANDROID_SDK_ROOT="$HOME/Android/Sdk"   # or your SDK path
 
 Output:
 
-`app/build/outputs/apk/debug/LiveVocoder-v7.0-debug.apk`
+`app/build/outputs/apk/debug/app-debug.apk` (Gradle’s default name; the app is still version **7.0** in the manifest.)
 
 ## Release APK (signed)
 
@@ -32,3 +32,7 @@ Create a keystore (once), then in `app/build.gradle.kts` add a `signingConfigs.r
 ## Version bumps
 
 Edit `app/build.gradle.kts` (`versionCode`, `versionName`) and `app/src/main/res/values/strings.xml` (`version_line`) together with `cpp/src/app_version.hpp` on the desktop side.
+
+## Virtual audio
+
+The APK surfaces the same ideas as the desktop README: Android has no system-wide virtual cable like VB‑Audio. `RECORD_AUDIO` is declared for a future on-device vocoder; see `strings.xml` (`virtual_audio_body`) and the **Virtual audio on Android** section in the UI.
