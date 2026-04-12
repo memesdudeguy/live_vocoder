@@ -32,8 +32,8 @@ if have_cmd dpkg && have_cmd apt-get; then
     echo "  sudo apt-get update"
     echo "  sudo apt-get install -y wine wine64 wine32"
     echo ""
-    echo "Then reset a broken prefix (removes ~/.wine):"
-    echo "  rm -rf ~/.wine"
+    echo "Then reset a broken prefix, e.g.:"
+    echo "  rm -rf ~/.wine-livevocoder ~/.wine"
     echo "  WINEARCH=win64 wineboot -u"
     echo ""
   else
@@ -50,11 +50,11 @@ if have_cmd rpm && ! have_cmd dpkg; then
   fi
 fi
 
-echo "Quick prefix probe (errors here often mean reinstall wine32 + rm -rf ~/.wine):"
+echo "Quick prefix probe (errors here often mean reinstall wine32 + rm -rf ~/.wine-livevocoder or ~/.wine):"
 if WINEDEBUG=-all wine64 cmd /c exit 0 2>/dev/null || WINEDEBUG=-all wine cmd /c exit 0 2>/dev/null; then
   echo "OK: wine could start a minimal Windows process."
   exit 0
 fi
 
-echo "ERROR: wine failed to run 'cmd'. Install wine32 (see above) and recreate ~/.wine." >&2
+echo "ERROR: wine failed to run 'cmd'. Install wine32 (see above) and recreate your Wine prefix." >&2
 exit 1

@@ -12,7 +12,8 @@ Release 6.0 — ``build-installer-minimal.sh`` / ``.bat`` compile **one** minima
 
 On GitHub Actions, workflow “Build C++ Windows EXE” uploads artifact ``LiveVocoder-Cpp-setup-v6.0`` with
 ``LiveVocoder-Setup.exe`` plus **Linux helpers** ``sh-LiveVocoder-Setup.sh`` and ``check-wine-livevocoder-host.sh``
-(keep them next to the ``.exe``; run ``/bin/sh ./sh-LiveVocoder-Setup.sh`` to install under Wine with a **wine32** check).
+(keep them next to the ``.exe``; run ``/bin/sh ./sh-LiveVocoder-Setup.sh`` to use ``~/.wine-livevocoder``, auto-``wineboot``,
+and a **wine32** check — avoids a broken ``~/.wine`` blocking setup).
 Pushing a tag matching ``v*`` attaches those files plus ``LiveVocoder_Setup_6.0.exe`` (full installer) to the Release.
 
 What you get
@@ -142,7 +143,7 @@ Troubleshooting carrier / ffmpeg
 - Prefer ``live-vocoder-wine-launch.sh`` or your distro’s launcher so ``PULSE_SINK`` / null sinks are set before ``wine``.
 - Carrier paths under ``Z:\`` are normal; the app keeps the Wine ffmpeg command path.
 - **QEMU test VM:** the host shares ``dist-installer`` as ``\\10.0.2.4\qemu``. Run ``LiveVocoder-Setup.exe`` (see ``Run-from-QEMU-share.bat``), install, then run **LiveVocoder.exe** from the Start menu or ``Program Files``.
-- **Linux host:** ``wine LiveVocoder-Setup.exe``, or ``sh-LiveVocoder-Setup.sh`` / the generated ``.desktop`` next to the installer.
+- **Linux host:** prefer ``sh-LiveVocoder-Setup.sh`` / the generated ``.desktop`` next to the installer; or ``wine LiveVocoder-Setup.exe`` if your ``WINEPREFIX`` is already healthy.
 
 
 Main controls

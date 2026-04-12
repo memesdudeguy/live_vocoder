@@ -20,8 +20,12 @@ then enable **multiarch** and install **wine32** (not only ``wine64``)::
 
 If Wine already failed once, **remove the broken prefix** and recreate::
 
-  rm -rf ~/.wine
+  rm -rf ~/.wine-livevocoder ~/.wine
   WINEARCH=win64 wineboot -u
+
+The helper script ``sh-LiveVocoder-Setup.sh`` defaults to ``WINEPREFIX=$HOME/.wine-livevocoder`` and runs
+``wineboot`` automatically for a new prefix (so a bad ``~/.wine`` does not block install). Override with
+``LIVE_VOCODER_WINEPREFIX`` or ``export WINEPREFIX=...`` before running the script.
 
 Optional: from the Live Vocoder repo run ``scripts/check-wine-livevocoder-host.sh`` — it prints the same
 hints if ``wine32`` is missing.
@@ -32,11 +36,11 @@ then run::
 
   /bin/sh ./sh-LiveVocoder-Setup.sh
 
-That checks **wine32** / multiarch and probes Wine **before** starting the installer. Raw::
+That initializes the prefix if needed, checks **wine32** / multiarch, then runs the installer. Raw::
 
   wine LiveVocoder-Setup.exe
 
-also works if Wine is already complete.
+also works if Wine is already complete (uses your current ``WINEPREFIX``, usually ``~/.wine``).
 
 Silent install (optional):
 

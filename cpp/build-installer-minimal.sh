@@ -107,7 +107,7 @@ if [[ -n "$_setup_exe" ]]; then
     echo "Version=1.0"
     echo "Type=Application"
     echo "Name=Live Vocoder C++ Setup (Wine)"
-    echo "Comment=Minimal installer — checks wine32 then runs LiveVocoder-Setup.exe"
+    echo "Comment=Minimal installer — Wine prefix ~/.wine-livevocoder, wineboot if new, wine32 check"
     echo "Exec=/bin/sh \"${_sh_abs}\""
     echo "Icon=${_ic_abs}"
     echo "Categories=AudioVideo;Audio;Mixer;"
