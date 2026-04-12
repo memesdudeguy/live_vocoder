@@ -14,6 +14,8 @@
 #endif
 #include <windows.h>
 
+#include <pa_win_wasapi.h>
+
 /** True when running under Wine (Linux/macOS host) — skip Windows-only virtual cable auto-pick. */
 static bool lv_windows_is_wine_host() {
     HMODULE ntdll = GetModuleHandleA("ntdll.dll");
@@ -712,7 +714,7 @@ static void lv_win32_cap_duplex_suggested_latency(PaStreamParameters& inp, PaStr
         return;
     }
     const double hop_sec = static_cast<double>(hop) / sample_rate;
-    double cap_sec = 0.08;
+    double cap_sec = 0.048;
     if (const char* e = std::getenv("LIVE_VOCODER_PA_MAX_SUGGESTED_LATENCY_SEC"); e != nullptr && e[0] != '\0') {
         char* end = nullptr;
         const double v = std::strtod(e, &end);
@@ -738,6 +740,77 @@ static void lv_win32_cap_duplex_suggested_latency(PaStreamParameters& inp, PaStr
                          cap_sec * 1000.0, in0, out0);
         }
     }
+}
+
+static bool lv_win32_device_api_is_wasapi(PaDeviceIndex dev) {
+    const PaDeviceInfo* inf = Pa_GetDeviceInfo(dev);
+    if (inf == nullptr) {
+        return false;
+    }
+    const PaHostApiInfo* api = Pa_GetHostApiInfo(inf->hostApi);
+    return api != nullptr && api->type == paWASAPI;
+}
+
+static void lv_win32_wasapi_duplex_info_init(PaWasapiStreamInfo* w, PaWasapiStreamOption raw_opt) {
+    std::memset(w, 0, sizeof(*w));
+    w->size = sizeof(PaWasapiStreamInfo);
+    w->hostApiType = paWASAPI;
+    w->version = 1;
+    w->flags = paWinWasapiThreadPriority;
+    w->threadPriority = eThreadPriorityProAudio;
+    w->streamCategory = eAudioCategoryCommunications;
+    w->streamOption = raw_opt;
+}
+
+/**
+ * WASAPI event path can reach ~2 ms per PortAudio notes; attach stream category + thread priority when both
+ * endpoints are WASAPI. Fall back if the driver rejects options.
+ */
+static PaError lv_win32_open_duplex_wasapi(PaStream** stream, PaStreamParameters* inp, PaStreamParameters* outp,
+                                           double sample_rate, unsigned long hop, PaStreamCallback callback,
+                                           void* user_data) {
+    if (lv_windows_is_wine_host() || env_truthy(std::getenv("LIVE_VOCODER_PA_DISABLE_WASAPI_STREAMINFO"))) {
+        return Pa_OpenStream(stream, inp, outp, sample_rate, hop, paNoFlag, callback, user_data);
+    }
+    if (!lv_win32_device_api_is_wasapi(inp->device) || !lv_win32_device_api_is_wasapi(outp->device)) {
+        return Pa_OpenStream(stream, inp, outp, sample_rate, hop, paNoFlag, callback, user_data);
+    }
+    PaWasapiStreamInfo wi{};
+    PaWasapiStreamInfo wo{};
+    const bool want_raw = env_truthy(std::getenv("LIVE_VOCODER_PA_WASAPI_RAW"));
+    auto attempt = [&](PaWasapiStreamOption raw) -> PaError {
+        lv_win32_wasapi_duplex_info_init(&wi, raw);
+        lv_win32_wasapi_duplex_info_init(&wo, raw);
+        inp->hostApiSpecificStreamInfo = &wi;
+        outp->hostApiSpecificStreamInfo = &wo;
+        return Pa_OpenStream(stream, inp, outp, sample_rate, hop, paNoFlag, callback, user_data);
+    };
+    PaError e = attempt(want_raw ? eStreamOptionRaw : eStreamOptionNone);
+    if (e != paNoError && want_raw) {
+        e = attempt(eStreamOptionNone);
+    }
+    if (e != paNoError) {
+        inp->hostApiSpecificStreamInfo = nullptr;
+        outp->hostApiSpecificStreamInfo = nullptr;
+        e = Pa_OpenStream(stream, inp, outp, sample_rate, hop, paNoFlag, callback, user_data);
+        if (e == paNoError) {
+            static bool logged = false;
+            if (!logged) {
+                logged = true;
+                std::fprintf(stderr,
+                             "[LiveVocoder] WASAPI duplex: driver rejected host stream info; using PortAudio defaults.\n");
+            }
+        }
+    } else {
+        static bool logged_ok = false;
+        if (!logged_ok) {
+            logged_ok = true;
+            std::fprintf(stderr,
+                         "[LiveVocoder] WASAPI duplex: communications category + pro-audio thread priority. Optional: "
+                         "LIVE_VOCODER_PA_WASAPI_RAW=1 (bypass engine DSP), LIVE_VOCODER_PA_DISABLE_WASAPI_STREAMINFO=1.\n");
+        }
+    }
+    return e;
 }
 #endif
 
@@ -810,7 +883,11 @@ PaError pa_open_livevocoder_duplex(PaStream** stream, double sample_rate, unsign
         inp.suggestedLatency = ii->defaultLowInputLatency;
         outp.suggestedLatency = oi->defaultLowOutputLatency;
 #endif
+#if defined(_WIN32)
+        return lv_win32_open_duplex_wasapi(stream, &inp, &outp, sample_rate, hop, callback, user_data);
+#else
         return Pa_OpenStream(stream, &inp, &outp, sample_rate, hop, paNoFlag, callback, user_data);
+#endif
     };
 
     PaError e = open_pair(in_dev, out_dev);

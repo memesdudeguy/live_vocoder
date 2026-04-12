@@ -7,6 +7,8 @@
 #endif
 #include <windows.h>
 
+#include <pa_win_wasapi.h>
+
 #include <algorithm>
 #include <atomic>
 #include <cctype>
@@ -33,7 +35,7 @@ static void mon_cap_monitor_suggested_latency(PaStreamParameters& outp, double s
         return;
     }
     const double hop_sec = static_cast<double>(hop) / sample_rate;
-    double cap_sec = 0.08;
+    double cap_sec = 0.048;
     if (const char* e = std::getenv("LIVE_VOCODER_PA_MAX_SUGGESTED_LATENCY_SEC"); e != nullptr && e[0] != '\0') {
         char* end = nullptr;
         const double v = std::strtod(e, &end);
@@ -219,21 +221,46 @@ PaError pa_win32_monitor_output_start(PaStream** out_stream, double sample_rate,
     outp.device = sp;
     outp.channelCount = 2;
     outp.sampleFormat = paFloat32;
-    {
-        const char* hi = std::getenv("LIVE_VOCODER_WIN_MONITOR_HIGH_LATENCY");
-        const bool want_high = hi != nullptr && hi[0] != '\0' && hi[0] != '0' &&
-                               std::strcmp(hi, "false") != 0 && std::strcmp(hi, "no") != 0;
-        outp.suggestedLatency =
-            want_high ? oi->defaultHighOutputLatency : oi->defaultLowOutputLatency;
-        if (!want_high) {
-            mon_cap_monitor_suggested_latency(outp, sample_rate, hop);
-        }
+    const char* hi = std::getenv("LIVE_VOCODER_WIN_MONITOR_HIGH_LATENCY");
+    const bool want_high = hi != nullptr && hi[0] != '\0' && hi[0] != '0' &&
+                           std::strcmp(hi, "false") != 0 && std::strcmp(hi, "no") != 0;
+    outp.suggestedLatency = want_high ? oi->defaultHighOutputLatency : oi->defaultLowOutputLatency;
+    if (!want_high) {
+        mon_cap_monitor_suggested_latency(outp, sample_rate, hop);
     }
-    outp.hostApiSpecificStreamInfo = nullptr;
 
     PaStream* s = nullptr;
-    PaError e =
-        Pa_OpenStream(&s, nullptr, &outp, sample_rate, hop, paClipOff, monitor_callback, nullptr);
+    PaError e;
+    const PaHostApiInfo* host_api = Pa_GetHostApiInfo(oi->hostApi);
+    const bool try_wasapi = !want_high && host_api != nullptr && host_api->type == paWASAPI &&
+                            !mon_env_truthy(std::getenv("LIVE_VOCODER_PA_DISABLE_WASAPI_STREAMINFO"));
+    PaWasapiStreamInfo wo{};
+    auto open_mon = [&]() {
+        return Pa_OpenStream(&s, nullptr, &outp, sample_rate, hop, paClipOff, monitor_callback, nullptr);
+    };
+    if (try_wasapi) {
+        wo.size = sizeof(PaWasapiStreamInfo);
+        wo.hostApiType = paWASAPI;
+        wo.version = 1;
+        wo.flags = paWinWasapiThreadPriority;
+        wo.threadPriority = eThreadPriorityProAudio;
+        wo.streamCategory = eAudioCategoryMedia;
+        wo.streamOption =
+            mon_env_truthy(std::getenv("LIVE_VOCODER_PA_WASAPI_RAW")) ? eStreamOptionRaw : eStreamOptionNone;
+        outp.hostApiSpecificStreamInfo = &wo;
+        e = open_mon();
+        if (e != paNoError && wo.streamOption == eStreamOptionRaw) {
+            wo.streamOption = eStreamOptionNone;
+            e = open_mon();
+        }
+        if (e != paNoError) {
+            outp.hostApiSpecificStreamInfo = nullptr;
+            e = open_mon();
+        }
+    } else {
+        outp.hostApiSpecificStreamInfo = nullptr;
+        e = open_mon();
+    }
     if (e != paNoError) {
         return e;
     }

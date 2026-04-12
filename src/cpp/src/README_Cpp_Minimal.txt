@@ -204,9 +204,9 @@ delays some hosts saw with large buffers). If **VB-Audio’s control panel** sho
 force low latency and override a high-latency request.
 
 WASAPI can still advertise seconds of “low” latency; the app **caps** duplex + speaker-monitor suggested
-latency to **~80 ms** by default (``LIVE_VOCODER_PA_MAX_SUGGESTED_LATENCY_SEC``, or
-``LIVE_VOCODER_PA_DISABLE_SUGGESTED_CAP=1``). **OBS:** lower VB **Latency (smp)** and use audio **Sync Offset**;
-STFT processing adds tens of ms vs raw speech.
+latency to **~48 ms** by default and sets **WASAPI** communications/media category + pro-audio thread priority
+(``LIVE_VOCODER_PA_WASAPI_RAW=1``, ``LIVE_VOCODER_PA_DISABLE_WASAPI_STREAMINFO=1``, ``LIVE_VOCODER_PA_MAX_SUGGESTED_LATENCY_SEC``).
+**OBS:** lower VB **Latency (smp)** and use audio **Sync Offset**; STFT adds tens of ms vs raw speech.
 
 **Lower monitoring delay (live feel):** ``LIVE_VOCODER_LIVE_MONITORING=1`` also selects a **256-sample**
 PortAudio hop (~5.3 ms @ 48 kHz). On native Windows, **256-sample hops** are already the default unless

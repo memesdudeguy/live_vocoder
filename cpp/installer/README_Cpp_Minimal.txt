@@ -204,9 +204,14 @@ buffers, more delay). ``LIVE_VOCODER_PA_LOW_LATENCY=1`` and ``LIVE_VOCODER_LIVE_
 low latency explicitly.
 
 Some WASAPI devices still report **seconds** of latency even for “low” mode; builds **cap** interactive duplex
-and speaker-monitor streams to **~80 ms** by default (between one hop and that cap). Override with
+and speaker-monitor suggested latency to **~48 ms** by default (never below ~2× hop). Override with
 ``LIVE_VOCODER_PA_MAX_SUGGESTED_LATENCY_SEC=0.12`` (seconds, 0.005–0.5), or disable the cap with
 ``LIVE_VOCODER_PA_DISABLE_SUGGESTED_CAP=1`` if you trust the driver’s numbers.
+
+On **native Windows**, duplex and monitor (when WASAPI) also request **communications / media stream category**
+and **pro-audio thread priority**. Try ``LIVE_VOCODER_PA_WASAPI_RAW=1`` to bypass some Windows audio-engine DSP
+(may fail on some devices — the app retries without). Disable all of that with
+``LIVE_VOCODER_PA_DISABLE_WASAPI_STREAMINFO=1``.
 
 **OBS** hearing you **seconds** late: lower **Latency (smp)** in **VB-Audio Cable** control panel (avoid 4096+
 if you want tight sync), set OBS **Settings → Audio** buffer as low as stable, and use **Sync Offset** on the
