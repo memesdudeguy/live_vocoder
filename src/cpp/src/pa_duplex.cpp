@@ -727,14 +727,38 @@ PaError pa_open_livevocoder_duplex(PaStream** stream, double sample_rate, unsign
         inp.device = id;
         inp.channelCount = 1;
         inp.sampleFormat = paFloat32;
-        inp.suggestedLatency = ii->defaultLowInputLatency;
         inp.hostApiSpecificStreamInfo = nullptr;
         PaStreamParameters outp{};
         outp.device = od;
         outp.channelCount = 2;
         outp.sampleFormat = paFloat32;
-        outp.suggestedLatency = oi->defaultLowOutputLatency;
         outp.hostApiSpecificStreamInfo = nullptr;
+#if defined(_WIN32)
+        /* VB-Audio Virtual Cable: defaultLow* often increases Pull loss / glitches in their control panel.
+           High suggested latency widens PortAudio’s buffers; override with LIVE_VOCODER_PA_LOW_LATENCY=1. */
+        const bool vb_duplex = !lv_windows_is_wine_host() &&
+                               (lv_win32_pa_name_hints_vb_virtual_cable(ii->name) ||
+                                lv_win32_pa_name_hints_vb_virtual_cable(oi->name));
+        const bool force_low = env_truthy(std::getenv("LIVE_VOCODER_PA_LOW_LATENCY"));
+        const bool use_high = vb_duplex && !force_low;
+        if (use_high) {
+            static bool logged = false;
+            if (!logged) {
+                logged = true;
+                std::fprintf(stderr,
+                             "[LiveVocoder] VB-Cable duplex: using PortAudio high suggested latency (fewer VB pull "
+                             "underruns). Set LIVE_VOCODER_PA_LOW_LATENCY=1 to force low latency.\n");
+            }
+            inp.suggestedLatency = ii->defaultHighInputLatency;
+            outp.suggestedLatency = oi->defaultHighOutputLatency;
+        } else {
+            inp.suggestedLatency = ii->defaultLowInputLatency;
+            outp.suggestedLatency = oi->defaultLowOutputLatency;
+        }
+#else
+        inp.suggestedLatency = ii->defaultLowInputLatency;
+        outp.suggestedLatency = oi->defaultLowOutputLatency;
+#endif
         return Pa_OpenStream(stream, &inp, &outp, sample_rate, hop, paNoFlag, callback, user_data);
     };
 

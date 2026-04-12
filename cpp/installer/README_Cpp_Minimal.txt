@@ -195,6 +195,10 @@ Windows backends (e.g. **MME** vs **WASAPI**). Current builds auto-pick **VB-Cab
 mic**, or a **mic on the same API as CABLE Input**; you can still force a matching pair with
 ``LIVE_VOCODER_PA_INPUT`` / ``LIVE_VOCODER_PA_OUTPUT`` substrings from the same API column in the device list.
 
+If **VB-Audio’s control panel** shows **Pull loss** climbing while Live Vocoder runs, the app uses **higher
+PortAudio buffer latency** automatically when VB-Cable is in the duplex pair (reduces underruns). To force
+the old low-latency defaults: ``LIVE_VOCODER_PA_LOW_LATENCY=1``.
+
 If fonts\DejaVuSans.ttf is missing, the UI still uses Segoe UI / Arial where available.
 
 
