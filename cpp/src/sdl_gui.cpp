@@ -84,31 +84,41 @@ constexpr Rgba kChipSelFace{56, 48, 88, 255};
 constexpr Rgba kChipSelBorder{150, 128, 220, 220};
 constexpr Rgba kMicPink{255, 166, 243, 255};
 
-/** sdl_show_themed_message_box uses the OS light theme; colorScheme matches vm-card palette where SDL supports it. */
+/**
+ * OS message box with a single OK. Linux uses SDL custom colors; Windows uses system defaults — custom colorScheme +
+ * parent window has caused unreadable OK / stuck dialogs on some setups (tall text + wrong contrast).
+ */
 void sdl_show_themed_message_box(Uint32 flags, const char* title, const char* message, SDL_Window* window) {
     SDL_MessageBoxButtonData button{};
     button.flags = SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT;
     button.buttonid = 0;
     button.text = "OK";
 
+    SDL_MessageBoxData data{};
+    data.flags = flags;
+    data.title = title;
+    data.message = message;
+    data.numbuttons = 1;
+    data.buttons = &button;
+
+#if defined(_WIN32)
+    data.window = nullptr;
+    data.colorScheme = nullptr;
+#else
     SDL_MessageBoxColorScheme scheme{};
     scheme.colors[SDL_MESSAGEBOX_COLOR_BACKGROUND] = {kCardFill.r, kCardFill.g, kCardFill.b};
     scheme.colors[SDL_MESSAGEBOX_COLOR_TEXT] = {kBrand.r, kBrand.g, kBrand.b};
     scheme.colors[SDL_MESSAGEBOX_COLOR_BUTTON_BORDER] = {kSection.r, kSection.g, kSection.b};
     scheme.colors[SDL_MESSAGEBOX_COLOR_BUTTON_BACKGROUND] = {kGhostFace.r, kGhostFace.g, kGhostFace.b};
     scheme.colors[SDL_MESSAGEBOX_COLOR_BUTTON_SELECTED] = {kPrimaryBtn.r, kPrimaryBtn.g, kPrimaryBtn.b};
-
-    SDL_MessageBoxData data{};
-    data.flags = flags;
     data.window = window;
-    data.title = title;
-    data.message = message;
-    data.numbuttons = 1;
-    data.buttons = &button;
     data.colorScheme = &scheme;
+#endif
 
-    int buttonid = 0;
-    (void)SDL_ShowMessageBox(&data, &buttonid);
+    int buttonid = -1;
+    if (SDL_ShowMessageBox(&data, &buttonid) != 0) {
+        (void)SDL_ShowSimpleMessageBox(flags, title, message, window);
+    }
 }
 
 using App = lv_gui::LiveVocoderAudioApp;
