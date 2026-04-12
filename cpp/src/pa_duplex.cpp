@@ -1,5 +1,6 @@
 #include "pa_duplex.hpp"
 
+#include <algorithm>
 #include <cctype>
 #include <cstdio>
 #include <cstdlib>
@@ -703,6 +704,43 @@ void pa_log_all_devices_if_requested(FILE* out) {
                  static_cast<int>(Pa_GetDefaultOutputDevice()));
 }
 
+#if defined(_WIN32)
+/** Some WASAPI devices report defaultLow* latency of seconds; cap interactive streams to avoid multi‑second delay. */
+static void lv_win32_cap_duplex_suggested_latency(PaStreamParameters& inp, PaStreamParameters& outp, double sample_rate,
+                                                  unsigned long hop) {
+    if (env_truthy(std::getenv("LIVE_VOCODER_PA_DISABLE_SUGGESTED_CAP"))) {
+        return;
+    }
+    const double hop_sec = static_cast<double>(hop) / sample_rate;
+    double cap_sec = 0.08;
+    if (const char* e = std::getenv("LIVE_VOCODER_PA_MAX_SUGGESTED_LATENCY_SEC"); e != nullptr && e[0] != '\0') {
+        char* end = nullptr;
+        const double v = std::strtod(e, &end);
+        if (end != e && v >= 0.005 && v <= 0.5) {
+            cap_sec = v;
+        }
+    }
+    if (cap_sec < hop_sec * 2.0) {
+        cap_sec = hop_sec * 2.0;
+    }
+    const double in0 = inp.suggestedLatency;
+    const double out0 = outp.suggestedLatency;
+    inp.suggestedLatency = std::clamp(inp.suggestedLatency, hop_sec, cap_sec);
+    outp.suggestedLatency = std::clamp(outp.suggestedLatency, hop_sec, cap_sec);
+    if (in0 > cap_sec + 1e-4 || out0 > cap_sec + 1e-4) {
+        static bool logged = false;
+        if (!logged) {
+            logged = true;
+            std::fprintf(stderr,
+                         "[LiveVocoder] Capping duplex PortAudio suggested latency to ~%.0f ms (device reported up to "
+                         "%.3f s in / %.3f s out). Tune: LIVE_VOCODER_PA_MAX_SUGGESTED_LATENCY_SEC, or "
+                         "LIVE_VOCODER_PA_DISABLE_SUGGESTED_CAP=1.\n",
+                         cap_sec * 1000.0, in0, out0);
+        }
+    }
+}
+#endif
+
 PaError pa_open_livevocoder_duplex(PaStream** stream, double sample_rate, unsigned long hop,
                                    PaStreamCallback callback, void* user_data) {
     PaDeviceIndex in_dev = pick_input_device();
@@ -766,6 +804,7 @@ PaError pa_open_livevocoder_duplex(PaStream** stream, double sample_rate, unsign
             }
             inp.suggestedLatency = ii->defaultLowInputLatency;
             outp.suggestedLatency = oi->defaultLowOutputLatency;
+            lv_win32_cap_duplex_suggested_latency(inp, outp, sample_rate, hop);
         }
 #else
         inp.suggestedLatency = ii->defaultLowInputLatency;

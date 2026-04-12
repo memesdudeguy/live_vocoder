@@ -203,6 +203,11 @@ delays some hosts saw with large buffers). If **VB-Audio’s control panel** sho
 (more delay, fewer underruns). ``LIVE_VOCODER_PA_LOW_LATENCY=1`` and ``LIVE_VOCODER_LIVE_MONITORING=1`` still
 force low latency and override a high-latency request.
 
+WASAPI can still advertise seconds of “low” latency; the app **caps** duplex + speaker-monitor suggested
+latency to **~80 ms** by default (``LIVE_VOCODER_PA_MAX_SUGGESTED_LATENCY_SEC``, or
+``LIVE_VOCODER_PA_DISABLE_SUGGESTED_CAP=1``). **OBS:** lower VB **Latency (smp)** and use audio **Sync Offset**;
+STFT processing adds tens of ms vs raw speech.
+
 **Lower monitoring delay (live feel):** ``LIVE_VOCODER_LIVE_MONITORING=1`` also selects a **256-sample**
 PortAudio hop (~5.3 ms @ 48 kHz). On native Windows, **256-sample hops** are already the default unless
 ``LIVE_VOCODER_HIGH_LATENCY_HOP=1``. Finer control: ``LIVE_VOCODER_HOP`` = ``64``, ``128``, ``256``, or

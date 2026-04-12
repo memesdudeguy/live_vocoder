@@ -18,6 +18,46 @@
 
 namespace {
 
+static bool mon_env_truthy(const char* v) {
+    if (v == nullptr || v[0] == '\0' || (v[0] == '0' && v[1] == '\0')) {
+        return false;
+    }
+    if (std::strcmp(v, "false") == 0 || std::strcmp(v, "no") == 0) {
+        return false;
+    }
+    return true;
+}
+
+static void mon_cap_monitor_suggested_latency(PaStreamParameters& outp, double sample_rate, unsigned long hop) {
+    if (mon_env_truthy(std::getenv("LIVE_VOCODER_PA_DISABLE_SUGGESTED_CAP"))) {
+        return;
+    }
+    const double hop_sec = static_cast<double>(hop) / sample_rate;
+    double cap_sec = 0.08;
+    if (const char* e = std::getenv("LIVE_VOCODER_PA_MAX_SUGGESTED_LATENCY_SEC"); e != nullptr && e[0] != '\0') {
+        char* end = nullptr;
+        const double v = std::strtod(e, &end);
+        if (end != e && v >= 0.005 && v <= 0.5) {
+            cap_sec = v;
+        }
+    }
+    if (cap_sec < hop_sec * 2.0) {
+        cap_sec = hop_sec * 2.0;
+    }
+    const double was = outp.suggestedLatency;
+    outp.suggestedLatency = std::clamp(was, hop_sec, cap_sec);
+    if (was > cap_sec + 1e-4) {
+        static bool logged = false;
+        if (!logged) {
+            logged = true;
+            std::fprintf(stderr,
+                         "[LiveVocoder] Monitor speaker stream: capping suggested latency to ~%.0f ms (device reported "
+                         "%.3f s).\n",
+                         cap_sec * 1000.0, was);
+        }
+    }
+}
+
 static bool mon_ci_hay_contains(const char* hay, const char* needle) {
     if (needle == nullptr || needle[0] == '\0') {
         return true;
@@ -185,6 +225,9 @@ PaError pa_win32_monitor_output_start(PaStream** out_stream, double sample_rate,
                                std::strcmp(hi, "false") != 0 && std::strcmp(hi, "no") != 0;
         outp.suggestedLatency =
             want_high ? oi->defaultHighOutputLatency : oi->defaultLowOutputLatency;
+        if (!want_high) {
+            mon_cap_monitor_suggested_latency(outp, sample_rate, hop);
+        }
     }
     outp.hostApiSpecificStreamInfo = nullptr;
 

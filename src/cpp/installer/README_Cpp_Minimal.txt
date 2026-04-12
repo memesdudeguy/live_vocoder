@@ -203,6 +203,15 @@ delays some hosts saw with high buffers). If **Pull loss** climbs in VB-Audio’
 buffers, more delay). ``LIVE_VOCODER_PA_LOW_LATENCY=1`` and ``LIVE_VOCODER_LIVE_MONITORING=1`` still force
 low latency explicitly.
 
+Some WASAPI devices still report **seconds** of latency even for “low” mode; builds **cap** interactive duplex
+and speaker-monitor streams to **~80 ms** by default (between one hop and that cap). Override with
+``LIVE_VOCODER_PA_MAX_SUGGESTED_LATENCY_SEC=0.12`` (seconds, 0.005–0.5), or disable the cap with
+``LIVE_VOCODER_PA_DISABLE_SUGGESTED_CAP=1`` if you trust the driver’s numbers.
+
+**OBS** hearing you **seconds** late: lower **Latency (smp)** in **VB-Audio Cable** control panel (avoid 4096+
+if you want tight sync), set OBS **Settings → Audio** buffer as low as stable, and use **Sync Offset** on the
+audio source if a small fixed skew remains. The vocoder STFT still adds tens of ms vs raw speech.
+
 **Lower monitoring delay (live feel):** set ``LIVE_VOCODER_LIVE_MONITORING=1`` before starting the app. That
 uses a **256-sample** PortAudio hop (~5.3 ms @ 48 kHz instead of ~10.7 ms) with VB-Cable (may increase **Pull
 loss** — use ``LIVE_VOCODER_PA_HIGH_LATENCY=1`` or raise VB buffer if needed). Finer control:
