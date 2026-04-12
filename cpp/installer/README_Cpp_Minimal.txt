@@ -41,9 +41,12 @@ most reliable for driver install in VMs). **``/SILENT``** / **``/VERYSILENT``** 
 (no second ``runas`` hop). **``/CURRENTUSER``** (Wine / per-user) drops admin and VB uses **``ShellExec('runas', …)``**.
 Windows may still show **driver trust** / SmartScreen. **Note:** after ``runas``, exit code is often ``-1``.
 
+**If either installer or Windows says restart, reboot the PC (or VM) before testing OBS / Live Vocoder** — the
+virtual cable endpoints often do not show up in PortAudio until after a reboot.
+
 **If OBS has no “CABLE Input / Output”:** Approve **Windows Security** driver prompts during install. If you
 used **Skip**, or install failed, open ``C:\Program Files\Live Vocoder\extras\VBCABLE_Setup_x64.exe`` manually;
-then **restart OBS**. Check **Device Manager** for **VB-Audio Virtual Cable**.
+reboot if asked, then **restart OBS**. Check **Device Manager** for **VB-Audio Virtual Cable**.
 
 
 Smoke test (.f32 loads without starting audio)
@@ -55,7 +58,9 @@ Smoke test (.f32 loads without starting audio)
 
 Quick start (Windows)
 ---------------------
-1. Run ``LiveVocoder-Setup.exe`` and finish the wizard (or unzip/copy the whole folder).
+1. Run ``LiveVocoder-Setup.exe`` and finish the wizard (or unzip/copy the whole folder). Do **not** check
+   **Skip VB-Audio Virtual Cable** unless you intend to skip the driver. **Reboot** if the Live Vocoder or
+   VB-Audio installer (or Windows) asks — then test OBS / Live Vocoder.
 2. Start Live Vocoder from the Start menu or run LiveVocoder.exe in:
    C:\Program Files\Live Vocoder\
 3. Pick a carrier (see below), choose Vocode or Clean mic, then press Start.
