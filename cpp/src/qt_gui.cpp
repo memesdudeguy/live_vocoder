@@ -655,7 +655,7 @@ private:
             stopStream();
             app_.voc.reset();
             PaError err = pa_open_livevocoder_duplex(&stream_, static_cast<double>(lv_gui::kSampleRate),
-                                                     static_cast<unsigned long>(lv_gui::kHop), lv_gui::livevocoder_gui_pa_callback, &app_);
+                                                     static_cast<unsigned long>(lv_gui::livevocoder_hop_frames()), lv_gui::livevocoder_gui_pa_callback, &app_);
             if (err != paNoError) {
                 QMessageBox::critical(this, QStringLiteral("PortAudio"), QString::fromUtf8(Pa_GetErrorText(err)));
                 return false;
@@ -731,7 +731,8 @@ private:
 
         stopStream();
         try {
-            app_.voc = std::make_unique<StreamingVocoderCpp>(std::move(carrier), lv_gui::kSampleRate, 2048, lv_gui::kHop, preset_wet_,
+            app_.voc = std::make_unique<StreamingVocoderCpp>(std::move(carrier), lv_gui::kSampleRate, 2048,
+                                                             lv_gui::livevocoder_hop_frames(), preset_wet_,
                                                              36, 0.62, 0.88, preset_presence_, 1800.0, 1.0);
         } catch (const std::exception& e) {
             QMessageBox::critical(this, QStringLiteral("Vocoder"), QString::fromUtf8(e.what()));
@@ -743,7 +744,7 @@ private:
         app_.reverb_mix.store(ui_reverb_mix_, std::memory_order_relaxed);
 
         PaError err = pa_open_livevocoder_duplex(&stream_, static_cast<double>(lv_gui::kSampleRate),
-                                                 static_cast<unsigned long>(lv_gui::kHop), lv_gui::livevocoder_gui_pa_callback, &app_);
+                                                 static_cast<unsigned long>(lv_gui::livevocoder_hop_frames()), lv_gui::livevocoder_gui_pa_callback, &app_);
         if (err != paNoError) {
             app_.voc.reset();
             QMessageBox::critical(this, QStringLiteral("PortAudio"), QString::fromUtf8(Pa_GetErrorText(err)));

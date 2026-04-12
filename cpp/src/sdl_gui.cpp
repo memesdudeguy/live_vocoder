@@ -1546,7 +1546,7 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
             stop_stream();
             app.voc.reset();
             PaError err = pa_open_livevocoder_duplex(&stream, static_cast<double>(lv_gui::kSampleRate),
-                                                   static_cast<unsigned long>(lv_gui::kHop), lv_gui::livevocoder_gui_pa_callback, &app);
+                                                   static_cast<unsigned long>(lv_gui::livevocoder_hop_frames()), lv_gui::livevocoder_gui_pa_callback, &app);
             if (err != paNoError) {
                 sdl_show_themed_message_box(SDL_MESSAGEBOX_ERROR, "PortAudio", Pa_GetErrorText(err), window);
                 return false;
@@ -1621,7 +1621,8 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
         }
         stop_stream();
         try {
-            app.voc = std::make_unique<StreamingVocoderCpp>(std::move(carrier), lv_gui::kSampleRate, 2048, lv_gui::kHop, preset_wet, 36,
+            app.voc = std::make_unique<StreamingVocoderCpp>(std::move(carrier), lv_gui::kSampleRate, 2048,
+                                                            lv_gui::livevocoder_hop_frames(), preset_wet, 36,
                                                             0.62, 0.88, preset_presence, 1800.0, 1.0);
         } catch (const std::exception& e) {
             sdl_show_themed_message_box(SDL_MESSAGEBOX_ERROR, "Vocoder", e.what(), window);
@@ -1633,7 +1634,7 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
         app.reverb_mix.store(ui_reverb_mix, std::memory_order_relaxed);
 
         PaError err = pa_open_livevocoder_duplex(&stream, static_cast<double>(lv_gui::kSampleRate),
-                                                 static_cast<unsigned long>(lv_gui::kHop), lv_gui::livevocoder_gui_pa_callback, &app);
+                                                 static_cast<unsigned long>(lv_gui::livevocoder_hop_frames()), lv_gui::livevocoder_gui_pa_callback, &app);
         if (err != paNoError) {
             app.voc.reset();
             sdl_show_themed_message_box(SDL_MESSAGEBOX_ERROR, "PortAudio", Pa_GetErrorText(err), window);

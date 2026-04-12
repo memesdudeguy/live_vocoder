@@ -32,6 +32,7 @@
 #include <filesystem>
 
 #include "carrier_convert.hpp"
+#include "gui_audio_engine.hpp"
 #include "linux_pulse_env.hpp"
 #include "pa_duplex.hpp"
 #include "vocoder.hpp"
@@ -46,7 +47,6 @@
 namespace {
 
 constexpr int kSr = 48000;
-constexpr int kHop = 512;
 
 struct App {
     std::unique_ptr<StreamingVocoderCpp> voc;
@@ -211,7 +211,7 @@ static int run_validate_carrier_only(const char* carrier_path, int sample_rate) 
         return 1;
     }
     try {
-        StreamingVocoderCpp test_voc(std::move(carrier), sample_rate, 2048, kHop);
+        StreamingVocoderCpp test_voc(std::move(carrier), sample_rate, 2048, lv_gui::livevocoder_hop_frames());
         (void)test_voc;
     } catch (const std::exception& e) {
         std::fprintf(stderr, "vocoder: %s\n", e.what());
@@ -241,7 +241,8 @@ int run_minimal_cpp_vocoder(char* argv0, const char* carrier_path, int sample_ra
 
     App app;
     try {
-        app.voc = std::make_unique<StreamingVocoderCpp>(std::move(carrier), sample_rate, 2048, kHop);
+        app.voc = std::make_unique<StreamingVocoderCpp>(std::move(carrier), sample_rate, 2048,
+                                                         lv_gui::livevocoder_hop_frames());
     } catch (const std::exception& e) {
         std::fprintf(stderr, "vocoder: %s\n", e.what());
         if (!tmp_f32.empty()) {
@@ -291,7 +292,7 @@ int run_minimal_cpp_vocoder(char* argv0, const char* carrier_path, int sample_ra
 
     PaStream* stream = nullptr;
     err = pa_open_livevocoder_duplex(&stream, static_cast<double>(sample_rate),
-                                     static_cast<unsigned long>(kHop), pa_callback, &app);
+                                     static_cast<unsigned long>(lv_gui::livevocoder_hop_frames()), pa_callback, &app);
     if (err != paNoError) {
         std::fprintf(stderr, "pa_open_livevocoder_duplex: %s\n", Pa_GetErrorText(err));
         Pa_Terminate();

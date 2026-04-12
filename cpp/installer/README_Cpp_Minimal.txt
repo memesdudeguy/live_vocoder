@@ -199,6 +199,12 @@ If **VB-Audio’s control panel** shows **Pull loss** climbing while Live Vocode
 PortAudio buffer latency** automatically when VB-Cable is in the duplex pair (reduces underruns). To force
 the old low-latency defaults: ``LIVE_VOCODER_PA_LOW_LATENCY=1``.
 
+**Lower monitoring delay (live feel):** set ``LIVE_VOCODER_LIVE_MONITORING=1`` before starting the app. That
+uses a **256-sample** PortAudio hop (~5.3 ms @ 48 kHz instead of ~10.7 ms) and **low** PortAudio suggested
+latency with VB-Cable (may increase **Pull loss** — raise VB buffer or clear if needed). Finer control:
+``LIVE_VOCODER_HOP`` = ``64``, ``128``, ``256``, or ``512`` (must divide 2048). Also lower **Latency (smp)**
+in **VB-Audio Virtual Cable** control panel if it is very high (e.g. 7168).
+
 If fonts\DejaVuSans.ttf is missing, the UI still uses Segoe UI / Arial where available.
 
 

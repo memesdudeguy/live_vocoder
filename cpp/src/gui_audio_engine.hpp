@@ -6,6 +6,8 @@
 #include <atomic>
 #include <cmath>
 #include <cstddef>
+#include <cstdlib>
+#include <cstring>
 #include <memory>
 #include <vector>
 
@@ -14,7 +16,37 @@
 namespace lv_gui {
 
 inline constexpr int kSampleRate = 48000;
-inline constexpr int kHop = 512;
+
+/** Parse once: PortAudio + vocoder hop (must divide 2048). Default 512 (~10.7 ms @ 48 kHz). */
+inline int livevocoder_hop_frames() {
+    static const int k_cached = [] {
+        constexpr int k_n_fft = 2048;
+        constexpr int k_default = 512;
+        auto parse_hop = [](const char* e) -> int {
+            if (e == nullptr || e[0] == '\0') {
+                return -1;
+            }
+            char* end = nullptr;
+            const long x = std::strtol(e, &end, 10);
+            if (end == e || x < 64 || x > 512 || k_n_fft % x != 0) {
+                return -1;
+            }
+            return static_cast<int>(x);
+        };
+        if (const int from_env = parse_hop(std::getenv("LIVE_VOCODER_HOP")); from_env > 0) {
+            return from_env;
+        }
+        const char* live = std::getenv("LIVE_VOCODER_LIVE_MONITORING");
+        if (live != nullptr && live[0] != '\0' && !(live[0] == '0' && live[1] == '\0')) {
+            if (std::strcmp(live, "false") == 0 || std::strcmp(live, "no") == 0) {
+                return k_default;
+            }
+            return 256;
+        }
+        return k_default;
+    }();
+    return k_cached;
+}
 
 /** Cheap comb delay + wet/dry — same behavior as SDL GUI. */
 struct LightReverb {

@@ -24,7 +24,8 @@ void pa_log_all_devices_if_requested(FILE* out);
  *   the duplex open is retargeted to one API (VB-Cable on the mic's API, else mic on the cable's API) so
  *   Pa_OpenStream does not fail with paBadIODeviceCombination ("Illegal combination of I/O devices").
  * Native Windows: if either device is VB-Audio Virtual Cable, uses high suggested PortAudio latency to reduce
- * VB control panel "Pull loss" / glitches; LIVE_VOCODER_PA_LOW_LATENCY=1 forces low latency.
+ * VB control panel "Pull loss" / glitches; LIVE_VOCODER_PA_LOW_LATENCY=1 or
+ * LIVE_VOCODER_LIVE_MONITORING=1 forces low latency.
  */
 PaError pa_open_livevocoder_duplex(PaStream** stream, double sample_rate, unsigned long hop,
                                    PaStreamCallback callback, void* user_data);
