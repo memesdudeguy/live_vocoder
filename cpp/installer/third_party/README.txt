@@ -18,7 +18,8 @@ causes “Missing .inf file or Driver package corrupted” when the installer ru
 **Legacy:** a lone `third_party/VBCABLE_Setup_x64.exe` still bundles, but the build script warns
 that driver install may fail until you add the full pack.
 
-Then run `./bundle-installer-minimal.sh` (or `./build-installer-minimal.sh`).
+Then run `./bundle-installer-minimal.sh` (or `./build-installer-minimal.sh`). The pack also ships
+`VBCABLE_ControlPanel.exe` — documented in `README_Cpp_Minimal.txt` for Windows routing debug.
 
 Without `vbcable/VBCABLE_Setup_x64.exe` (or the legacy exe), the minimal installer still builds but
 omits the VB-Cable task until you add files or use CI.

@@ -107,6 +107,10 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags
 ; Under Wine, shortcuts to LiveVocoder.exe skip PipeWire setup — use the host .desktop from InstallWineLauncherScript instead.
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\LiveVocoder.ico"; Comment: "{#MyAppName} (SDL2)"; Check: not IsRunningUnderWine
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
+#ifdef VBCableBundled
+; VB-Audio’s own UI — useful for levels / mute / troubleshooting (not a full Windows patchbay).
+Name: "{group}\VB-Audio Virtual Cable (Control Panel)"; Filename: "{app}\extras\VBCABLE_ControlPanel.exe"; WorkingDir: "{app}\extras"; Flags: skipifdoesntexist; Check: not IsRunningUnderWine
+#endif
 Name: "{commondesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\LiveVocoder.ico"; Tasks: desktopicon; Check: not IsRunningUnderWine
 
 [Run]
@@ -455,7 +459,9 @@ begin
 #ifdef VBCableBundled
       WizardForm.FinishedLabel.Caption := WizardForm.FinishedLabel.Caption + #13#10#13#10 +
         'Bundled VB-Cable (double-click if it did not install automatically):'#13#10 +
-        ExpandConstant('{app}\extras\VBCABLE_Setup_x64.exe');
+        ExpandConstant('{app}\extras\VBCABLE_Setup_x64.exe') + #13#10#13#10 +
+        'VB-Audio control panel (levels / mute — handy for OBS routing debug):'#13#10 +
+        ExpandConstant('{app}\extras\VBCABLE_ControlPanel.exe');
 #endif
     end;
     if IsRunningUnderWine and (not WizardSilent) then

@@ -7,8 +7,8 @@ Release 6.0 — ``build-installer-minimal.sh`` / ``.bat`` compile **one** minima
 
 - ``LiveVocoder-Setup.exe`` — use on **native Windows** or with **Wine** on Linux (Wine-only extras apply at install-time when the installer detects Wine).
   **ISCC** writes it to ``cpp/dist-installer/LiveVocoder-Setup.exe`` (relative to the repo). On the wizard **Finish**
-  page (non-silent), the full path of the ``.exe`` you ran is shown, plus the path to bundled
-  ``extras\VBCABLE_Setup_x64.exe`` if VB-Cable did not install automatically.
+  page (non-silent), the full path of the ``.exe`` you ran is shown, plus paths under ``extras\`` for
+  ``VBCABLE_Setup_x64.exe`` and **``VBCABLE_ControlPanel.exe``** (VB-Audio’s own UI for debug).
 
 On GitHub Actions, workflow “Build C++ Windows EXE” uploads artifact ``LiveVocoder-Cpp-setup-v6.0`` with
 ``LiveVocoder-Setup.exe`` plus **Linux helpers** ``sh-LiveVocoder-Setup.sh`` and ``check-wine-livevocoder-host.sh``
@@ -52,6 +52,11 @@ virtual cable endpoints often do not show up in PortAudio until after a reboot.
 used **Skip**, or install failed, run ``VBCABLE_Setup_x64.exe`` from ``C:\Program Files\Live Vocoder\extras\``
 (leave the other VB-Audio files in that folder). Reboot if asked, then **restart OBS**. Check **Device Manager**
 for **VB-Audio Virtual Cable**.
+
+**VB-Audio control panel (debug):** The driver pack includes ``VBCABLE_ControlPanel.exe`` in the same
+``extras`` folder (also linked from **Start → Live Vocoder → VB-Audio Virtual Cable (Control Panel)** after install).
+Use it to check **levels**, **mute**, and basic cable state when OBS or PortAudio routing looks wrong — it is not a
+full graph like Linux PipeWire, but it is the official VB-Audio tool for this driver.
 
 **If setup says “DeleteFile failed; code 5” for ``LiveVocoder.exe``:** Quit **Live Vocoder** (and anything using
 that folder), then choose **Try again**. The installer can also finish after a reboot if the file was locked.
