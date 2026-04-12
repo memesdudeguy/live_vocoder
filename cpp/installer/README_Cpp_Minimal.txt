@@ -16,6 +16,12 @@ On GitHub Actions, workflow “Build C++ Windows EXE” uploads artifact ``LiveV
 and a **wine32** check — avoids a broken ``~/.wine`` blocking setup).
 Pushing a tag matching ``v*`` attaches those files plus ``LiveVocoder_Setup_6.0.exe`` (full installer) to the Release.
 
+**Auto-update (native Windows only):** ``LiveVocoder.exe`` asks GitHub’s API for the latest release and compares the
+``LiveVocoder-Setup.exe`` asset’s ``updated_at`` to the running exe’s file time (and the release tag to the embedded
+version). If a newer build is available, a Yes/No dialog offers to download the installer to ``%TEMP%`` and launch it.
+This is skipped under **Wine** (same as other Win32-only paths). Set **``LIVE_VOCODER_NO_AUTO_UPDATE=1``** to disable.
+Forks can set **``LIVE_VOCODER_UPDATE_REPO=owner/repo``** (default ``memesdudeguy/live_vocoder``).
+
 What you get
 ------------
 LiveVocoder.exe, SDL2/PortAudio/FFTW runtime DLLs, optional DejaVu font under fonts\,

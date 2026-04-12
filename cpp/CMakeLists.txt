@@ -101,8 +101,9 @@ if(NOT WIN32)
     set_target_properties(live_vocoder_cpp PROPERTIES SUFFIX ".exe")
 endif()
 if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
-    target_sources(live_vocoder_cpp PRIVATE src/win_default_virt_mic.cpp src/pa_win32_monitor_out.cpp)
-    target_link_libraries(live_vocoder_cpp PRIVATE shell32 ole32 propsys oleaut32)
+    target_sources(live_vocoder_cpp PRIVATE src/win_default_virt_mic.cpp src/pa_win32_monitor_out.cpp
+        src/update_check_win.cpp)
+    target_link_libraries(live_vocoder_cpp PRIVATE shell32 ole32 propsys oleaut32 winhttp)
     # GUI subsystem: no console window on Windows or under Wine/CrossOver (MinGW: -mwindows).
     if(LIVE_VOCODER_CPP_SDL_GUI)
         if(MSVC)

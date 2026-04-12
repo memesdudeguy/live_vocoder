@@ -39,6 +39,7 @@
 #include "vocoder.hpp"
 #if defined(_WIN32)
 #include "pa_win32_monitor_out.hpp"
+#include "update_check_win.hpp"
 #include "win_default_virt_mic.hpp"
 #endif
 
@@ -1416,6 +1417,11 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
     }
 #endif
 
+#if defined(_WIN32)
+    LiveVocoderUpdateCheck update_check;
+    live_vocoder_update_check_begin(&update_check);
+#endif
+
     App app;
     app.reverb_mix.store(ui_reverb_mix, std::memory_order_relaxed);
     PaStream* stream = nullptr;
@@ -1717,6 +1723,27 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
     while (!quit) {
         int ww = 640, wh = 600;
         SDL_GetWindowSize(window, &ww, &wh);
+
+#if defined(_WIN32)
+        {
+            bool u_have = false;
+            std::string u_url;
+            if (live_vocoder_update_check_poll(&update_check, &u_have, &u_url) && u_have && !u_url.empty()) {
+                const int r = MessageBoxW(
+                    nullptr,
+                    L"A newer Live Vocoder build is available on GitHub. Download and run the installer now?\n\n"
+                    L"You can keep using the app; quit when you are ready to replace the installation.",
+                    L"Live Vocoder — Update",
+                    MB_YESNO | MB_ICONINFORMATION | MB_TOPMOST);
+                if (r == IDYES) {
+                    std::string derr;
+                    if (!live_vocoder_download_and_run_installer(u_url.c_str(), derr)) {
+                        MessageBoxA(nullptr, derr.c_str(), "Live Vocoder — Update", MB_OK | MB_ICONWARNING);
+                    }
+                }
+            }
+        }
+#endif
 
         TTF_Font* lay_font = fonts_ok ? fonts.small : nullptr;
         Layout lay = compute_layout(ww, wh, fonts_ok, lay_font);
