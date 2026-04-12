@@ -10,6 +10,9 @@
 
 #define SDL_MAIN_HANDLED
 #include <SDL.h>
+#if defined(_WIN32)
+#include <SDL_syswm.h>
+#endif
 #include <SDL_ttf.h>
 
 #include <portaudio.h>
@@ -84,11 +87,46 @@ constexpr Rgba kChipSelFace{56, 48, 88, 255};
 constexpr Rgba kChipSelBorder{150, 128, 220, 220};
 constexpr Rgba kMicPink{255, 166, 243, 255};
 
+#if defined(_WIN32)
+/** UTF-8 → UTF-16 for native MessageBoxW (SDL message box can omit visible OK on some VMs / long text). */
+static std::wstring win32_utf8_to_wide(const char* s) {
+    if (s == nullptr || s[0] == '\0')
+        return std::wstring();
+    int n = MultiByteToWideChar(CP_UTF8, 0, s, -1, nullptr, 0);
+    if (n <= 0)
+        return std::wstring();
+    std::wstring out(static_cast<size_t>(n - 1), L'\0');
+    if (MultiByteToWideChar(CP_UTF8, 0, s, -1, out.data(), n) <= 0)
+        return std::wstring();
+    return out;
+}
+#endif
+
 /**
- * OS message box with a single OK. Linux uses SDL custom colors; Windows uses system defaults — custom colorScheme +
- * parent window has caused unreadable OK / stuck dialogs on some setups (tall text + wrong contrast).
+ * OS message box with a single OK. Linux uses SDL custom colors. Windows uses native MessageBoxW — SDL's Win32
+ * implementation has shown dialogs with no visible OK / no close on VMware and similar setups.
  */
 void sdl_show_themed_message_box(Uint32 flags, const char* title, const char* message, SDL_Window* window) {
+#if defined(_WIN32)
+    std::wstring wtitle = win32_utf8_to_wide(title != nullptr ? title : "");
+    std::wstring wmsg = win32_utf8_to_wide(message != nullptr ? message : "");
+    UINT mb = MB_OK;
+    if ((flags & SDL_MESSAGEBOX_ERROR) != 0)
+        mb |= MB_ICONERROR;
+    else if ((flags & SDL_MESSAGEBOX_WARNING) != 0)
+        mb |= MB_ICONWARNING;
+    else
+        mb |= MB_ICONINFORMATION;
+    HWND owner = nullptr;
+    if (window != nullptr) {
+        SDL_SysWMinfo wm{};
+        SDL_VERSION(&wm.version);
+        if (SDL_GetWindowWMInfo(window, &wm))
+            owner = wm.info.win.window;
+    }
+    MessageBoxW(owner, wmsg.c_str(), wtitle.c_str(), mb);
+    return;
+#else
     SDL_MessageBoxButtonData button{};
     button.flags = SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT;
     button.buttonid = 0;
@@ -101,10 +139,6 @@ void sdl_show_themed_message_box(Uint32 flags, const char* title, const char* me
     data.numbuttons = 1;
     data.buttons = &button;
 
-#if defined(_WIN32)
-    data.window = nullptr;
-    data.colorScheme = nullptr;
-#else
     SDL_MessageBoxColorScheme scheme{};
     scheme.colors[SDL_MESSAGEBOX_COLOR_BACKGROUND] = {kCardFill.r, kCardFill.g, kCardFill.b};
     scheme.colors[SDL_MESSAGEBOX_COLOR_TEXT] = {kBrand.r, kBrand.g, kBrand.b};
@@ -113,12 +147,11 @@ void sdl_show_themed_message_box(Uint32 flags, const char* title, const char* me
     scheme.colors[SDL_MESSAGEBOX_COLOR_BUTTON_SELECTED] = {kPrimaryBtn.r, kPrimaryBtn.g, kPrimaryBtn.b};
     data.window = window;
     data.colorScheme = &scheme;
-#endif
 
     int buttonid = -1;
-    if (SDL_ShowMessageBox(&data, &buttonid) != 0) {
+    if (SDL_ShowMessageBox(&data, &buttonid) != 0)
         (void)SDL_ShowSimpleMessageBox(flags, title, message, window);
-    }
+#endif
 }
 
 using App = lv_gui::LiveVocoderAudioApp;
