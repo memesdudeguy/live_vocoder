@@ -30,6 +30,14 @@ The helper script ``sh-LiveVocoder-Setup.sh`` defaults to ``WINEPREFIX=$HOME/.wi
 Optional: from the Live Vocoder repo run ``scripts/check-wine-livevocoder-host.sh`` — it prints the same
 hints if ``wine32`` is missing.
 
+**Only downloaded the .exe?** Use the standalone runner (isolated prefix + ``wineboot``; pass your path)::
+
+  curl -sLO https://raw.githubusercontent.com/memesdudeguy/live_vocoder/main/scripts/wine-run-livevocoder-setup.sh
+  chmod +x wine-run-livevocoder-setup.sh
+  ./wine-run-livevocoder-setup.sh '/path/to/LiveVocoder-Setup(4).exe'
+
+You still need **wine32** installed (see above); the script reminds you if it looks missing.
+
 **Recommended on Linux:** keep ``LiveVocoder-Setup.exe``, ``sh-LiveVocoder-Setup.sh``, and
 ``check-wine-livevocoder-host.sh`` in the **same folder** (release zip / ``cpp/dist-installer/`` after build),
 then run::
