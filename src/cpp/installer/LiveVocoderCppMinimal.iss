@@ -109,7 +109,7 @@ Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{a
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 #ifdef VBCableBundled
 ; VB-Audio’s own UI — useful for levels / mute / troubleshooting (not a full Windows patchbay).
-Name: "{group}\VB-Audio Virtual Cable (Control Panel)"; Filename: "{app}\extras\VBCABLE_ControlPanel.exe"; WorkingDir: "{app}\extras"; Flags: skipifdoesntexist; Check: not IsRunningUnderWine
+Name: "{group}\VB-Audio Virtual Cable (Control Panel)"; Filename: "{app}\extras\VBCABLE_ControlPanel.exe"; WorkingDir: "{app}\extras"; Flags: createonlyiffileexists; Check: not IsRunningUnderWine
 #endif
 Name: "{commondesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\LiveVocoder.ico"; Tasks: desktopicon; Check: not IsRunningUnderWine
 
