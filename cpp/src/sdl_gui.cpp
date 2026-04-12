@@ -1254,8 +1254,11 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
     if (fonts_ok) {
 #if defined(_WIN32)
         const char* kMonitorHelp =
-            "Monitor on/off: on normal speakers, off silences them. Pick playback with LIVE_VOCODER_PA_OUTPUT "
-            "(name substring) or LIVE_VOCODER_PA_LIST_DEVICES=1; see README for other PortAudio env vars.";
+            "Windows + VB-Cable: PortAudio plays to one device only. When that is CABLE Input, sound goes into the "
+            "cable for OBS/Discord (mic = CABLE Output) — not to your headphones. To hear yourself: Sound settings → "
+            "CABLE Output → Listen → choose your speakers; or set LIVE_VOCODER_DISABLE_VB_CABLE=1 and "
+            "LIVE_VOCODER_PA_OUTPUT to your real speakers (then send game/chat audio to the cable another way). "
+            "Monitor off + non-virtual output silences playback. LIST_DEVICES=1 lists PortAudio names.";
 #else
         const char* kMonitorHelp =
             "Monitor on/off: silences local playback when off (including PipeWire default output). "
@@ -1775,8 +1778,9 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
                                              "the .f32 is missing or older than the audio file.\n"
                                              "Default: carrier.f32 in that folder or beside the .exe.\n"
                                              "Clean mic: dry passthrough — no carrier; press Start.\n"
-                                             "Monitor: hear output on the chosen playback device; Off silences typical "
-                                             "local playback (see also the startup note on Monitor).\n"
+                                             "Monitor: when playback is VB-CABLE Input, audio goes to the cable only — use "
+                                             "Windows Listen on CABLE Output for headphones, or PA_OUTPUT to real speakers "
+                                             "(see README). Off + non-virtual output silences playback.\n"
                                              "Quick sound chips: wet + presence baseline; Clarity / Reverb sliders tune live.\n\n"
                                              "Windows: LIVE_VOCODER_PA_INPUT / LIVE_VOCODER_PA_OUTPUT (name substring) or "
                                              "*_INDEX; LIVE_VOCODER_PA_LIST_DEVICES=1 lists devices.\n"

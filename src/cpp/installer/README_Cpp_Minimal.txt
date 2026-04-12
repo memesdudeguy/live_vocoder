@@ -58,6 +58,19 @@ for **VB-Audio Virtual Cable**.
 Use it to check **levels**, **mute**, and basic cable state when OBS or PortAudio routing looks wrong — it is not a
 full graph like Linux PipeWire, but it is the official VB-Audio tool for this driver.
 
+**Can’t hear yourself on Monitor (Windows + cable):** Live Vocoder opens **one** PortAudio playback device. If that
+device is **CABLE Input**, all processed audio goes **into the virtual cable** (good for OBS). It does **not**
+also play to your headset — there is no built-in “split” to real speakers. Use **Settings → Sound → CABLE Output →
+Listen to this device** and pick your headphones/speakers, **or** run with ``LIVE_VOCODER_DISABLE_VB_CABLE=1`` and
+``LIVE_VOCODER_PA_OUTPUT`` set to your physical output (then you lose automatic cable routing for OBS unless you
+add another path). **VB-Cable control panel** can help confirm the cable isn’t muted.
+
+**Virtual mic / OBS has no sound:** Press **Start** in Live Vocoder (streaming must be running). In OBS add **Audio
+Input Capture** → **CABLE Output** (not CABLE Input). Signal flows **Live Vocoder → CABLE Input → cable → CABLE
+Output → OBS**. If meters in Live Vocoder stay flat, fix the **real microphone** in Windows (Privacy / Sound input)
+or ``LIVE_VOCODER_PA_INPUT``. If Live Vocoder shows output level but OBS is silent, OBS is almost certainly listening
+to the wrong device.
+
 **If setup says “DeleteFile failed; code 5” for ``LiveVocoder.exe``:** Quit **Live Vocoder** (and anything using
 that folder), then choose **Try again**. The installer can also finish after a reboot if the file was locked.
 
