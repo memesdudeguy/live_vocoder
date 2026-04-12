@@ -73,7 +73,8 @@ Name: "skipvbcable"; Description: "Skip VB-Audio Virtual Cable (otherwise it ins
 [Files]
 Source: "LiveVocoder.ico"; DestDir: "{app}"; Flags: ignoreversion
 ; App + carrier converter: both must land in the same directory ({app}) so LiveVocoder.exe finds sibling ffmpeg.exe.
-Source: "{#MinimalRoot}\LiveVocoder.exe"; DestDir: "{app}"; Flags: ignoreversion
+; If the old build is still running, replace on next reboot instead of failing with DeleteFile code 5.
+Source: "{#MinimalRoot}\LiveVocoder.exe"; DestDir: "{app}"; Flags: ignoreversion restartreplace
 Source: "{#MinimalRoot}\ffmpeg.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#MinimalRoot}\*.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#MinimalRoot}\app-icon.png"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
