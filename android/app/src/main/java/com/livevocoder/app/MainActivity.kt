@@ -37,6 +37,10 @@ class MainActivity : AppCompatActivity() {
         binding.buttonCheckApkUpdate.setOnClickListener {
             checkForApkUpdate()
         }
+
+        binding.buttonFullHelp.setOnClickListener {
+            startActivity(Intent(this, AboutActivity::class.java))
+        }
     }
 
     private fun ensureInstallFromUnknownSources(): Boolean {
