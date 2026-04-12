@@ -34,7 +34,9 @@ automatically** after the app files (no “opt-in” checkbox). The wizard has a
 by default; use ``/MERGETASKS=skipvbcable`` to skip it.
 For local builds, place ``VBCABLE_Setup_x64.exe`` in ``cpp/installer/third_party/`` (extract from that zip
 or from https://vb-audio.com/Cable/ ) before ``bundle-installer-minimal.sh``. VB-Audio is donationware.
-The bundled ``VBCABLE_Setup_x64.exe`` runs with silent args ``-i -h -H -n`` and **``SW_SHOW``** (not hidden).
+The bundled ``VBCABLE_Setup_x64.exe`` runs **with no silent flags** during a normal GUI setup (full VB-Audio wizard —
+most reliable for driver install in VMs). **``/SILENT``** / **``/VERYSILENT``** Live Vocoder installs still pass
+``-i -h -H -n`` to VB-Cable so the wizard does not block automation. **``SW_SHOW``** (not hidden).
 **``PrivilegesRequired=admin``** means setup is elevated after the first UAC, so VB-Cable uses **``Exec``**
 (no second ``runas`` hop). **``/CURRENTUSER``** (Wine / per-user) drops admin and VB uses **``ShellExec('runas', …)``**.
 Windows may still show **driver trust** / SmartScreen. **Note:** after ``runas``, exit code is often ``-1``.

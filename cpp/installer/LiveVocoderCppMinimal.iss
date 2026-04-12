@@ -340,6 +340,7 @@ procedure CurStepChanged(CurStep: TSetupStep);
 #ifdef VBCableBundled
 var
   VbEc: Integer;
+  VbParams: String;
 #endif
 begin
   if CurStep = ssPostInstall then
@@ -353,16 +354,23 @@ begin
     else if (not WizardIsTaskSelected('skipvbcable')) and
             FileExists(ExpandConstant('{app}\extras\VBCABLE_Setup_x64.exe')) then
     begin
+      { Silent -i -h -H -n often exits without installing the driver (VMs, policies). GUI install is reliable.
+        Keep silent only for /SILENT installs so automation does not block on VB-Audio's wizard. }
+      if WizardSilent then
+        VbParams := '-i -h -H -n'
+      else
+        VbParams := '';
       if not WizardSilent then
       begin
-        WizardForm.StatusLabel.Caption := 'Installing VB-Audio Virtual Cable automatically (silent flags; approve driver trust if Windows asks)...';
+        if VbParams <> '' then
+          WizardForm.StatusLabel.Caption := 'Installing VB-Audio Virtual Cable (silent; driver trust may still appear)...'
+        else
+          WizardForm.StatusLabel.Caption := 'VB-Audio Virtual Cable — complete the installer window and approve the driver...';
         WizardForm.Update;
       end;
-      { Use SW_SHOW (not SW_HIDE): hidden subprocesses often fail for elevated NSIS/driver installs or skip UAC UI.
-        -i -h -H -n still suppresses VB-Audio wizard noise; user may see a brief window or security dialog. }
       if IsAdmin then
       begin
-        if Exec(ExpandConstant('{app}\extras\VBCABLE_Setup_x64.exe'), '-i -h -H -n',
+        if Exec(ExpandConstant('{app}\extras\VBCABLE_Setup_x64.exe'), VbParams,
              ExpandConstant('{app}\extras'), SW_SHOW, ewWaitUntilTerminated, VbEc) then
         begin
           if (VbEc > 0) and (not WizardSilent) then
@@ -374,7 +382,7 @@ begin
           MsgBox('VB-Audio Virtual Cable could not be started. Run manually:'#13#10 +
                  ExpandConstant('{app}\extras\VBCABLE_Setup_x64.exe'), mbInformation, MB_OK);
       end
-      else if ShellExec('runas', ExpandConstant('{app}\extras\VBCABLE_Setup_x64.exe'), '-i -h -H -n',
+      else if ShellExec('runas', ExpandConstant('{app}\extras\VBCABLE_Setup_x64.exe'), VbParams,
            ExpandConstant('{app}\extras'), SW_SHOW, ewWaitUntilTerminated, VbEc) then
       begin
         { ShellExec(..., 'runas', ...) often leaves ResultCode as -1 even when the elevated child
