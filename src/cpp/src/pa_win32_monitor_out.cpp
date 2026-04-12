@@ -226,7 +226,11 @@ void pa_win32_monitor_output_feed(bool duplex_targets_virt_route, bool monitor_o
         interleaved_stereo_lr == nullptr || frames == 0) {
         return;
     }
-    std::lock_guard<std::mutex> lock(g_q_mu);
+    /* Duplex realtime path: do not block if the monitor output callback holds g_q_mu. */
+    std::unique_lock<std::mutex> lk(g_q_mu, std::try_to_lock);
+    if (!lk.owns_lock()) {
+        return;
+    }
     const std::size_t add = static_cast<std::size_t>(frames) * 2u;
     while (g_q.size() + add > k_max_samples && g_q.size() >= 2) {
         g_q.pop_front();
