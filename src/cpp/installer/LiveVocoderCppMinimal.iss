@@ -44,6 +44,9 @@ SolidCompression=yes
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 DisableProgramGroupPage=yes
+; Native Windows: require admin so VB-Cable runs via Exec (same token) — avoids flaky ShellExec('runas')
+; and error 740 when the main setup was not elevated. Wine/automation: /CURRENTUSER still allowed below.
+PrivilegesRequired=admin
 ; commandline: /CURRENTUSER or /ALLUSERS without a GUI prompt (needed for /VERYSILENT under Wine).
 PrivilegesRequiredOverridesAllowed=commandline
 UsedUserAreasWarning=no
@@ -63,7 +66,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 #ifexist "..\dist-windows-installer-minimal\extras\VBCABLE_Setup_x64.exe"
 ; No "checkedonce": it persists an unchecked state across reinstalls so VB-Cable never runs again.
 ; Omit Flags so the grouped task defaults to checked each run (Inno: first task in group is checked by default).
-Name: "vbcable"; Description: "Install VB-Audio Virtual Cable (silent flags -i -h -H -n; UAC if setup is not admin; driver trust may still appear)"; GroupDescription: "Windows native audio:"; Check: not IsRunningUnderWine
+Name: "vbcable"; Description: "Install VB-Audio Virtual Cable (silent -i -h -H -n; setup is admin on Windows — driver trust may still appear; /CURRENTUSER skips admin and adds a separate UAC for VB)"; GroupDescription: "Windows native audio:"; Check: not IsRunningUnderWine
 #endif
 
 [Files]

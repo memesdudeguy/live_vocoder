@@ -30,14 +30,13 @@ or from https://vb-audio.com/Cable/ ) before ``bundle-installer-minimal.sh``. VB
 The bundled ``VBCABLE_Setup_x64.exe`` runs **after** file install with silent args ``-i -h -H -n``.
 The subprocess uses **``SW_SHOW``** (not hidden): **``SW_HIDE``** often breaks **UAC** / NSIS / driver
 install paths. You may see a short window or security dialog; VB-Audio’s flags still skip their wizard.
-If the Live Vocoder setup is **already elevated**
-(**``IsAdmin``** — e.g. right-click Run as administrator, or install for all users with UAC), it uses
-**``Exec``** so the driver installer runs in-process as admin and exit codes are reliable. If the
-setup is not admin (typical per-user install), it uses **``ShellExec('runas', …)``** — one **UAC**
-prompt, and Windows may still show **driver trust** / SmartScreen dialogs (not suppressible from our
-installer without importing VB-Audio’s publisher certificate). Fully unattended installs may need that
-certificate or MDM policy (VB-Audio / Microsoft docs). **Note:** after ``runas``, the child exit code
-is often ``-1``; only positive codes are treated as definite failure.
+The minimal installer sets **``PrivilegesRequired=admin``** on native Windows so setup is **already
+elevated** after the initial UAC — VB-Cable runs with **``Exec``** (reliable exit codes, no second
+``runas`` hop). For **Wine** or forced per-user installs, **``/CURRENTUSER``** (with
+``PrivilegesRequiredOverridesAllowed``) can drop admin; VB-Cable then uses **``ShellExec('runas', …)``**
+(another UAC). Windows may still show **driver trust** / SmartScreen (not fully suppressible without
+trusting VB-Audio’s publisher). **Note:** after ``runas``, the child exit code is often ``-1``; only
+positive codes are treated as definite failure.
 
 The wizard task no longer uses **``checkedonce``**: that flag **persists** an unchecked choice across
 reinstalls, so VB-Cable would **never run again** after you unchecked it once. The task is the default
