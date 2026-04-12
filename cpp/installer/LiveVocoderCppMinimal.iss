@@ -64,9 +64,8 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 #ifexist "..\dist-windows-installer-minimal\extras\VBCABLE_Setup_x64.exe"
-; No "checkedonce": it persists an unchecked state across reinstalls so VB-Cable never runs again.
-; Omit Flags so the grouped task defaults to checked each run (Inno: first task in group is checked by default).
-Name: "vbcable"; Description: "Install VB-Audio Virtual Cable (silent -i -h -H -n; setup is admin on Windows — driver trust may still appear; /CURRENTUSER skips admin and adds a separate UAC for VB)"; GroupDescription: "Windows native audio:"; Check: not IsRunningUnderWine
+; VB-Cable runs automatically after file install unless the user checks this (unchecked by default).
+Name: "skipvbcable"; Description: "Skip VB-Audio Virtual Cable (otherwise it installs automatically; driver trust may still appear)"; GroupDescription: "Windows native audio:"; Flags: unchecked; Check: not IsRunningUnderWine
 #endif
 
 [Files]
@@ -351,12 +350,12 @@ begin
       InstallWineLauncherScript;
     end
 #ifdef VBCableBundled
-    else if WizardIsTaskSelected('vbcable') and
+    else if (not WizardIsTaskSelected('skipvbcable')) and
             FileExists(ExpandConstant('{app}\extras\VBCABLE_Setup_x64.exe')) then
     begin
       if not WizardSilent then
       begin
-        WizardForm.StatusLabel.Caption := 'Installing VB-Audio Virtual Cable (silent flags; UAC or driver trust may appear)...';
+        WizardForm.StatusLabel.Caption := 'Installing VB-Audio Virtual Cable automatically (silent flags; approve driver trust if Windows asks)...';
         WizardForm.Update;
       end;
       { Use SW_SHOW (not SW_HIDE): hidden subprocesses often fail for elevated NSIS/driver installs or skip UAC UI.

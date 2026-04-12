@@ -28,29 +28,20 @@ the app uses Windows ffmpeg.exe and host PipeWire via the installer’s Wine-onl
 that heuristic is off—use ``PULSE_SINK`` / null-sink routing on the Linux host instead.
 
 **VB-Cable in the setup:** GitHub Actions downloads the official ``VBCABLE_Driver_Pack45.zip`` and bundles
-``VBCABLE_Setup_x64.exe`` into release ``LiveVocoder-Setup.exe`` (checked wizard task on native Windows).
+``VBCABLE_Setup_x64.exe`` into release ``LiveVocoder-Setup.exe``. On **native Windows**, VB-Cable **installs
+automatically** after the app files (no “opt-in” checkbox). The wizard has an **optional unchecked** task
+**“Skip VB-Audio Virtual Cable”** only if you must not run the driver installer. Silent installs run VB-Cable
+by default; use ``/MERGETASKS=skipvbcable`` to skip it.
 For local builds, place ``VBCABLE_Setup_x64.exe`` in ``cpp/installer/third_party/`` (extract from that zip
 or from https://vb-audio.com/Cable/ ) before ``bundle-installer-minimal.sh``. VB-Audio is donationware.
-The bundled ``VBCABLE_Setup_x64.exe`` runs **after** file install with silent args ``-i -h -H -n``.
-The subprocess uses **``SW_SHOW``** (not hidden): **``SW_HIDE``** often breaks **UAC** / NSIS / driver
-install paths. You may see a short window or security dialog; VB-Audio’s flags still skip their wizard.
-The minimal installer sets **``PrivilegesRequired=admin``** on native Windows so setup is **already
-elevated** after the initial UAC — VB-Cable runs with **``Exec``** (reliable exit codes, no second
-``runas`` hop). For **Wine** or forced per-user installs, **``/CURRENTUSER``** (with
-``PrivilegesRequiredOverridesAllowed``) can drop admin; VB-Cable then uses **``ShellExec('runas', …)``**
-(another UAC). Windows may still show **driver trust** / SmartScreen (not fully suppressible without
-trusting VB-Audio’s publisher). **Note:** after ``runas``, the child exit code is often ``-1``; only
-positive codes are treated as definite failure.
+The bundled ``VBCABLE_Setup_x64.exe`` runs with silent args ``-i -h -H -n`` and **``SW_SHOW``** (not hidden).
+**``PrivilegesRequired=admin``** means setup is elevated after the first UAC, so VB-Cable uses **``Exec``**
+(no second ``runas`` hop). **``/CURRENTUSER``** (Wine / per-user) drops admin and VB uses **``ShellExec('runas', …)``**.
+Windows may still show **driver trust** / SmartScreen. **Note:** after ``runas``, exit code is often ``-1``.
 
-The wizard task no longer uses **``checkedonce``**: that flag **persists** an unchecked choice across
-reinstalls, so VB-Cable would **never run again** after you unchecked it once. The task is the default
-in its group so it stays **on** each run unless you turn it off for that install.
-
-**If OBS has no “CABLE Input / Output” after the checkbox:** You must approve **UAC** and any **Windows
-Security** “install driver” prompts for the elevated VB-Cable window. If unsure it succeeded, open
-``C:\Program Files\Live Vocoder\extras\VBCABLE_Setup_x64.exe`` (double-click, not silent) and finish
-the wizard; then **restart OBS** or sign out/in. Check **Device Manager → Sound, video and game
-controllers** for **VB-Audio Virtual Cable**.
+**If OBS has no “CABLE Input / Output”:** Approve **Windows Security** driver prompts during install. If you
+used **Skip**, or install failed, open ``C:\Program Files\Live Vocoder\extras\VBCABLE_Setup_x64.exe`` manually;
+then **restart OBS**. Check **Device Manager** for **VB-Audio Virtual Cable**.
 
 
 Smoke test (.f32 loads without starting audio)
