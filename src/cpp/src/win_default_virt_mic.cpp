@@ -320,7 +320,8 @@ std::string lv_win32_try_set_default_capture_to_vb_cable() {
                          "[LiveVocoder] Native Windows: default recording device set to VB-Audio CABLE Output "
                          "(Discord/OBS can use Default). Disable: LIVE_VOCODER_WIN_DEFAULT_VIRT_MIC=0.\n");
         }
-        std::string out = "Windows default mic → CABLE Output";
+        // Not PortAudio routing: system default *recording* so OBS/Discord can use "Default" as mic.
+        std::string out = "OBS: Default mic = CABLE Output · Vocoder: real mic in, playback → CABLE Input";
         if (!cable_name.empty()) {
             out += " (";
             const int need = WideCharToMultiByte(CP_UTF8, 0, cable_name.c_str(), -1, nullptr, 0, nullptr, nullptr);
