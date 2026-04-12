@@ -35,6 +35,9 @@ has an **optional unchecked** task **“Skip VB-Audio Virtual Cable”** only if
 Silent installs run VB-Cable by default; use ``/MERGETASKS=skipvbcable`` to skip it.
 For local builds, extract the zip into ``cpp/installer/third_party/vbcable/`` (see ``third_party/README.txt``)
 before ``bundle-installer-minimal.sh``. VB-Audio is donationware.
+During setup, Live Vocoder **copies** the VB pack from ``{app}\extras`` into a **session temp folder** and runs
+``VBCABLE_Setup_x64.exe`` from there (VB-Audio often errors if the driver setup is launched directly under
+``Program Files\Live Vocoder\extras``). The full pack remains under ``extras`` for manual installs.
 The bundled ``VBCABLE_Setup_x64.exe`` runs **with no silent flags** during a normal GUI setup (full VB-Audio wizard —
 most reliable for driver install in VMs). **``/SILENT``** / **``/VERYSILENT``** Live Vocoder installs still pass
 ``-i -h -H -n`` to VB-Cable so the wizard does not block automation. **``SW_SHOW``** (not hidden).
