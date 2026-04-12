@@ -4,6 +4,7 @@
 #include "gui_audio_engine.hpp"
 #include "linux_pulse_env.hpp"
 #include "pa_duplex.hpp"
+#include "pa_win32_monitor_out.hpp"
 #include "vocoder.hpp"
 #if defined(_WIN32)
 #include "win_default_virt_mic.hpp"
@@ -12,6 +13,13 @@
 #if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+static bool qt_win32_is_wine_host() {
+    HMODULE ntdll = GetModuleHandleA("ntdll.dll");
+    if (ntdll == nullptr) {
+        return false;
+    }
+    return GetProcAddress(ntdll, "wine_get_version") != nullptr;
+}
 #endif
 #if defined(__linux__)
 #include <unistd.h>
@@ -368,6 +376,7 @@ private slots:
         app_.monitor_on.store(on, std::memory_order_relaxed);
         if (streaming_) {
             syncVirtSinkSpeakerLoopback();
+            syncWin32MonitorDuplex();
         }
         refreshTitle();
     }
@@ -622,7 +631,33 @@ private:
         sync_linux_physical_monitor_mute();
     }
 
+    void syncWin32MonitorDuplex() {
+#if defined(_WIN32)
+        pa_win32_monitor_output_stop(win_mon_stream_);
+        win_mon_stream_ = nullptr;
+        if (!streaming_ || qt_win32_is_wine_host()) {
+            return;
+        }
+        if (!pa_duplex_output_targets_virt_sink_route()) {
+            return;
+        }
+        if (!app_.monitor_on.load(std::memory_order_relaxed)) {
+            return;
+        }
+        (void)pa_win32_monitor_output_start(
+            &win_mon_stream_, static_cast<double>(lv_gui::kSampleRate),
+            static_cast<unsigned long>(lv_gui::livevocoder_hop_frames()),
+            pa_duplex_last_opened_output_device());
+#else
+        (void)0;
+#endif
+    }
+
     void stopStream() {
+#if defined(_WIN32)
+        pa_win32_monitor_output_stop(win_mon_stream_);
+        win_mon_stream_ = nullptr;
+#endif
         if (stream_ != nullptr) {
             Pa_StopStream(stream_);
             Pa_CloseStream(stream_);
@@ -680,6 +715,7 @@ private:
             app_.reverb_mix.store(ui_reverb_mix_, std::memory_order_relaxed);
             streaming_ = true;
             syncVirtSinkSpeakerLoopback();
+            syncWin32MonitorDuplex();
             btn_start_->setEnabled(false);
             btn_stop_->setEnabled(true);
             refreshTitle();
@@ -769,6 +805,7 @@ private:
 #endif
         streaming_ = true;
         syncVirtSinkSpeakerLoopback();
+        syncWin32MonitorDuplex();
         btn_start_->setEnabled(false);
         btn_stop_->setEnabled(true);
         refreshTitle();
@@ -782,6 +819,9 @@ private:
 
     lv_gui::LiveVocoderAudioApp app_;
     PaStream* stream_{nullptr};
+#if defined(_WIN32)
+    PaStream* win_mon_stream_{nullptr};
+#endif
     bool streaming_{false};
     bool pa_initialized_{false};
     char pulse_sink_buf_[256]{};

@@ -805,6 +805,10 @@ void pa_duplex_note_stream_closed() {
     g_duplex_out_dev = paNoDevice;
 }
 
+PaDeviceIndex pa_duplex_last_opened_output_device() {
+    return g_duplex_out_dev;
+}
+
 bool pa_duplex_output_targets_virt_sink_route() {
     if (g_duplex_out_dev < 0) {
         return false;
@@ -918,11 +922,9 @@ std::string pa_windows_virt_mic_route_hint() {
     const PaDeviceIndex cab =
         lv_native_windows_pick_vb_cable_output_device(static_cast<PaDeviceIndex>(n_raw));
     if (cab >= 0) {
-        // Status bar is concatenated with win_default_virt_mic (system default recording). Keep this line about
-        // PortAudio *playback* to CABLE Input only — avoid repeating OBS/Discord (already in that string).
-        return "PortAudio plays processed audio to CABLE Input (not the same as \"CABLE Output\" capture). "
-               "Overrides: LIVE_VOCODER_PA_OUTPUT / _INDEX; disable VB auto-pick: LIVE_VOCODER_DISABLE_VB_CABLE=1; "
-               "LIST_DEVICES=1.";
+        return "PortAudio → CABLE Input; Monitor on → speakers too. OBS: mic CABLE Output. "
+               "LIVE_VOCODER_WIN_DEFAULT_VIRT_MIC=1 sets Windows default recording to CABLE. "
+               "PA_OUTPUT / DISABLE_VB_CABLE / LIST_DEVICES=1.";
     }
     return "VB-Cable not in PortAudio — run VBCABLE_Setup_x64.exe from Program Files\\Live Vocoder\\extras "
            "(full driver pack) or https://vb-audio.com/Cable/ · reboot if asked · LIST_DEVICES=1.";

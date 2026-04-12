@@ -16,8 +16,9 @@ void pa_log_all_devices_if_requested(FILE* out);
  *   else LIVE_VOCODER_PULSE_SINK — substring match on output device name (Linux; after PULSE_SINK env)
  *   else on native Windows (not Wine): VB-Audio Virtual Cable playback (CABLE Input) if installed and
  *        LIVE_VOCODER_PA_OUTPUT / _INDEX unset — disable with LIVE_VOCODER_DISABLE_VB_CABLE=1; if the default
- *        input is CABLE Output, prefers another capture device for the microphone when available; on startup
- *        sets Windows default recording device to CABLE Output when present (LIVE_VOCODER_WIN_DEFAULT_VIRT_MIC=0 to skip)
+ *        input is CABLE Output, prefers another capture device for the microphone when available; on native Windows,
+ *        optional: LIVE_VOCODER_WIN_DEFAULT_VIRT_MIC=1 sets system default recording to CABLE Output for OBS/Discord
+ *        "Default" mic (otherwise real mic stays Windows default).
  *   else system default input/output
  * Output device must report at least 2 output channels (stereo).
  * Native Windows: if the chosen mic and output use different PortAudio host APIs (e.g. MME vs WASAPI),
@@ -35,6 +36,9 @@ void pa_log_stream_devices(PaStream* stream);
 
 /** After Pa_CloseStream on the duplex stream, call so monitor/sink heuristics reset. */
 void pa_duplex_note_stream_closed();
+
+/** Output device index from the last successful ``pa_open_livevocoder_duplex`` (or paNoDevice). */
+PaDeviceIndex pa_duplex_last_opened_output_device();
 
 /**
  * True if the output device used for the last successful ``pa_open_livevocoder_duplex`` looks like a PipeWire/Pulse

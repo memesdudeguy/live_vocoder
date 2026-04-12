@@ -12,7 +12,8 @@ Release 6.0 — ``build-installer-minimal.sh`` / ``.bat`` compile **one** minima
 
 On GitHub Actions, workflow “Build C++ Windows EXE” uploads artifact ``LiveVocoder-Cpp-setup-v6.0`` with
 ``LiveVocoder-Setup.exe`` plus **Linux helpers** ``sh-LiveVocoder-Setup.sh`` and ``check-wine-livevocoder-host.sh``
-(keep them next to the ``.exe``; run ``/bin/sh ./sh-LiveVocoder-Setup.sh`` to install under Wine with a **wine32** check).
+(keep them next to the ``.exe``; run ``/bin/sh ./sh-LiveVocoder-Setup.sh`` to use ``~/.wine-livevocoder``, auto-``wineboot``,
+and a **wine32** check — avoids a broken ``~/.wine`` blocking setup).
 Pushing a tag matching ``v*`` attaches those files plus ``LiveVocoder_Setup_6.0.exe`` (full installer) to the Release.
 
 What you get
@@ -142,7 +143,7 @@ Troubleshooting carrier / ffmpeg
 - Prefer ``live-vocoder-wine-launch.sh`` or your distro’s launcher so ``PULSE_SINK`` / null sinks are set before ``wine``.
 - Carrier paths under ``Z:\`` are normal; the app keeps the Wine ffmpeg command path.
 - **QEMU test VM:** the host shares ``dist-installer`` as ``\\10.0.2.4\qemu``. Run ``LiveVocoder-Setup.exe`` (see ``Run-from-QEMU-share.bat``), install, then run **LiveVocoder.exe** from the Start menu or ``Program Files``.
-- **Linux host:** ``wine LiveVocoder-Setup.exe``, or ``sh-LiveVocoder-Setup.sh`` / the generated ``.desktop`` next to the installer.
+- **Linux host:** prefer ``sh-LiveVocoder-Setup.sh`` / the generated ``.desktop`` next to the installer; or ``wine LiveVocoder-Setup.exe`` if your ``WINEPREFIX`` is already healthy.
 
 
 Main controls
@@ -182,8 +183,10 @@ variables (then restart the app):
   LIVE_VOCODER_PA_INPUT_INDEX   zero-based input index
   LIVE_VOCODER_PA_OUTPUT  substring of the output device name, or
   LIVE_VOCODER_PA_OUTPUT_INDEX  zero-based output index
-  LIVE_VOCODER_WIN_DEFAULT_VIRT_MIC  set to ``0`` to skip setting Windows default recording device to VB-Audio
-  CABLE Output (default: on when VB-Cable is installed; use with ``LIVE_VOCODER_DISABLE_VB_CABLE=1`` to leave defaults alone)
+  LIVE_VOCODER_WIN_DEFAULT_VIRT_MIC  set to ``1`` to set Windows **default recording** to VB-Audio **CABLE Output**
+  (so OBS/Discord can use **Default** mic). **Omit** or ``0`` to **leave your real mic** as the system default.
+  LIVE_VOCODER_WIN_MONITOR_DEVICE  optional **substring** of the **speaker** device name for Monitor preview on Windows
+  when playback is the virtual cable (e.g. ``Speakers`` or ``Headphones``).
 
 List names once:
   set LIVE_VOCODER_PA_LIST_DEVICES=1
@@ -193,6 +196,16 @@ If PortAudio reports **“Illegal combination of I/O devices”**, the mic and p
 Windows backends (e.g. **MME** vs **WASAPI**). Current builds auto-pick **VB-Cable on the same API as the
 mic**, or a **mic on the same API as CABLE Input**; you can still force a matching pair with
 ``LIVE_VOCODER_PA_INPUT`` / ``LIVE_VOCODER_PA_OUTPUT`` substrings from the same API column in the device list.
+
+If **VB-Audio’s control panel** shows **Pull loss** climbing while Live Vocoder runs, the app uses **higher
+PortAudio buffer latency** automatically when VB-Cable is in the duplex pair (reduces underruns). To force
+the old low-latency defaults: ``LIVE_VOCODER_PA_LOW_LATENCY=1``.
+
+**Lower monitoring delay (live feel):** set ``LIVE_VOCODER_LIVE_MONITORING=1`` before starting the app. That
+uses a **256-sample** PortAudio hop (~5.3 ms @ 48 kHz instead of ~10.7 ms) and **low** PortAudio suggested
+latency with VB-Cable (may increase **Pull loss** — raise VB buffer or clear if needed). Finer control:
+``LIVE_VOCODER_HOP`` = ``64``, ``128``, ``256``, or ``512`` (must divide 2048). Also lower **Latency (smp)**
+in **VB-Audio Virtual Cable** control panel if it is very high (e.g. 7168).
 
 If fonts\DejaVuSans.ttf is missing, the UI still uses Segoe UI / Arial where available.
 

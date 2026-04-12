@@ -80,9 +80,22 @@ static bool env_disable_vb_cable() {
     return v[0] == '1' || v[0] == 't' || v[0] == 'T' || v[0] == 'y' || v[0] == 'Y';
 }
 
-static bool win_default_virt_mic_explicit_off() {
-    const char* e = std::getenv("LIVE_VOCODER_WIN_DEFAULT_VIRT_MIC");
-    return e != nullptr && e[0] == '0' && e[1] == '\0';
+static bool env_truthy_mic(const char* v) {
+    if (v == nullptr || v[0] == '\0') {
+        return false;
+    }
+    if (v[0] == '0' && v[1] == '\0') {
+        return false;
+    }
+    if (std::strcmp(v, "false") == 0 || std::strcmp(v, "no") == 0) {
+        return false;
+    }
+    return true;
+}
+
+/** Opt-in: only change Windows default recording to CABLE when LIVE_VOCODER_WIN_DEFAULT_VIRT_MIC is truthy. */
+static bool win_default_virt_mic_explicit_on() {
+    return env_truthy_mic(std::getenv("LIVE_VOCODER_WIN_DEFAULT_VIRT_MIC"));
 }
 
 static wchar_t lv_wtolower(wchar_t c) {
@@ -195,7 +208,14 @@ std::string lv_win32_try_set_default_capture_to_vb_cable() {
     if (lv_win32_is_wine_host()) {
         return cached;
     }
-    if (env_disable_vb_cable() || win_default_virt_mic_explicit_off()) {
+    if (env_disable_vb_cable() || !win_default_virt_mic_explicit_on()) {
+        static bool logged_skip = false;
+        if (!logged_skip && !env_disable_vb_cable()) {
+            logged_skip = true;
+            std::fprintf(stderr,
+                         "[LiveVocoder] Native Windows: leaving default recording device unchanged "
+                         "(set LIVE_VOCODER_WIN_DEFAULT_VIRT_MIC=1 to set CABLE Output as system default mic).\n");
+        }
         return cached;
     }
 
@@ -318,7 +338,7 @@ std::string lv_win32_try_set_default_capture_to_vb_cable() {
             logged = true;
             std::fprintf(stderr,
                          "[LiveVocoder] Native Windows: default recording device set to VB-Audio CABLE Output "
-                         "(Discord/OBS can use Default). Disable: LIVE_VOCODER_WIN_DEFAULT_VIRT_MIC=0.\n");
+                         "(Discord/OBS can use Default). This was requested via LIVE_VOCODER_WIN_DEFAULT_VIRT_MIC=1.\n");
         }
         // Say "recording default" — users read "default mic" as the app's capture device and think routing is wrong.
         std::string out = "Windows recording default → CABLE Output (OBS/Discord can use \"Default\")";

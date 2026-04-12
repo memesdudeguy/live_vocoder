@@ -183,8 +183,10 @@ variables (then restart the app):
   LIVE_VOCODER_PA_INPUT_INDEX   zero-based input index
   LIVE_VOCODER_PA_OUTPUT  substring of the output device name, or
   LIVE_VOCODER_PA_OUTPUT_INDEX  zero-based output index
-  LIVE_VOCODER_WIN_DEFAULT_VIRT_MIC  set to ``0`` to skip setting Windows default recording device to VB-Audio
-  CABLE Output (default: on when VB-Cable is installed; use with ``LIVE_VOCODER_DISABLE_VB_CABLE=1`` to leave defaults alone)
+  LIVE_VOCODER_WIN_DEFAULT_VIRT_MIC  set to ``1`` to set Windows **default recording** to VB-Audio **CABLE Output**
+  (so OBS/Discord can use **Default** mic). **Omit** or ``0`` to **leave your real mic** as the system default.
+  LIVE_VOCODER_WIN_MONITOR_DEVICE  optional **substring** of the **speaker** device name for Monitor preview on Windows
+  when playback is the virtual cable (e.g. ``Speakers`` or ``Headphones``).
 
 List names once:
   set LIVE_VOCODER_PA_LIST_DEVICES=1

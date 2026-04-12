@@ -38,6 +38,7 @@
 #include "pa_duplex.hpp"
 #include "vocoder.hpp"
 #if defined(_WIN32)
+#include "pa_win32_monitor_out.hpp"
 #include "win_default_virt_mic.hpp"
 #endif
 
@@ -1314,9 +1315,10 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
     if (fonts_ok) {
 #if defined(_WIN32)
         const char* kMonitorHelp =
-            "VB-Cable: playback targets one device. CABLE Input → OBS/Discord use mic CABLE Output (not headphones). "
-            "Hear yourself: Sound → CABLE Output → Listen → your speakers. Or LIVE_VOCODER_DISABLE_VB_CABLE=1 and set "
-            "PA output to real speakers. ? / Help in-app for more. LIST_DEVICES=1 lists PortAudio names.";
+            "VB-Cable: PortAudio plays to CABLE Input (OBS mic = CABLE Output). Monitor on: also mirrors to your real "
+            "speakers/headphones (second PortAudio stream). LIVE_VOCODER_WIN_MONITOR_DEVICE=name substring picks that "
+            "device. LIVE_VOCODER_WIN_DEFAULT_VIRT_MIC=1 sets Windows default recording to CABLE Output (optional). "
+            "LIST_DEVICES=1 lists PortAudio names.";
 #else
         const char* kMonitorHelp =
             "Monitor on/off: silences local playback when off (including PipeWire default output). "
@@ -1417,6 +1419,9 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
     App app;
     app.reverb_mix.store(ui_reverb_mix, std::memory_order_relaxed);
     PaStream* stream = nullptr;
+#if defined(_WIN32)
+    PaStream* win_mon_stream = nullptr;
+#endif
     bool streaming = false;
 
     auto refresh_title = [&]() {
@@ -1522,7 +1527,33 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
         sync_linux_physical_monitor_mute();
     };
 
+#if defined(_WIN32)
+    auto sync_win32_monitor_duplex = [&]() {
+        pa_win32_monitor_output_stop(win_mon_stream);
+        win_mon_stream = nullptr;
+        if (!streaming || win32_is_wine_host()) {
+            return;
+        }
+        if (!pa_duplex_output_targets_virt_sink_route()) {
+            return;
+        }
+        if (!app.monitor_on.load(std::memory_order_relaxed)) {
+            return;
+        }
+        (void)pa_win32_monitor_output_start(
+            &win_mon_stream, static_cast<double>(lv_gui::kSampleRate),
+            static_cast<unsigned long>(lv_gui::livevocoder_hop_frames()),
+            pa_duplex_last_opened_output_device());
+    };
+#else
+    auto sync_win32_monitor_duplex = []() {};
+#endif
+
     auto stop_stream = [&]() {
+#if defined(_WIN32)
+        pa_win32_monitor_output_stop(win_mon_stream);
+        win_mon_stream = nullptr;
+#endif
         if (stream != nullptr) {
             Pa_StopStream(stream);
             Pa_CloseStream(stream);
@@ -1571,6 +1602,7 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
             app.reverb_mix.store(ui_reverb_mix, std::memory_order_relaxed);
             streaming = true;
             sync_virt_sink_speaker_loopback();
+            sync_win32_monitor_duplex();
             refresh_title();
             return true;
         }
@@ -1659,6 +1691,7 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
 #endif
         streaming = true;
         sync_virt_sink_speaker_loopback();
+        sync_win32_monitor_duplex();
         refresh_title();
         return true;
     };
@@ -1910,6 +1943,7 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
                         app.monitor_on.store(!app.monitor_on.load(std::memory_order_relaxed));
                         if (streaming) {
                             sync_virt_sink_speaker_loopback();
+                            sync_win32_monitor_duplex();
                         }
                         refresh_title();
                     } else {

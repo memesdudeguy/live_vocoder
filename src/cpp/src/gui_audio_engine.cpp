@@ -1,5 +1,7 @@
 #include "gui_audio_engine.hpp"
 
+#include "pa_win32_monitor_out.hpp"
+
 #include <algorithm>
 #include <cstring>
 
@@ -81,6 +83,11 @@ int livevocoder_gui_pa_callback(const void* input_buffer, void* output_buffer, u
         }
         mix_test_beep();
         store_out_peak();
+#if defined(_WIN32)
+        pa_win32_monitor_output_feed(
+            app->pulse_virt_sink_output.load(std::memory_order_relaxed),
+            app->monitor_on.load(std::memory_order_relaxed), out_ch, frames_per_buffer);
+#endif
         return paContinue;
     }
 
@@ -101,6 +108,10 @@ int livevocoder_gui_pa_callback(const void* input_buffer, void* output_buffer, u
     }
     mix_test_beep();
     store_out_peak();
+#if defined(_WIN32)
+    pa_win32_monitor_output_feed(app->pulse_virt_sink_output.load(std::memory_order_relaxed),
+                                 app->monitor_on.load(std::memory_order_relaxed), out_ch, frames_per_buffer);
+#endif
     return paContinue;
 }
 
