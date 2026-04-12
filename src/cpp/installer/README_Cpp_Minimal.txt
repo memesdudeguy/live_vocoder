@@ -28,12 +28,13 @@ the app uses Windows ffmpeg.exe and host PipeWire via the installer’s Wine-onl
 that heuristic is off—use ``PULSE_SINK`` / null-sink routing on the Linux host instead.
 
 **VB-Cable in the setup:** GitHub Actions downloads the official ``VBCABLE_Driver_Pack45.zip`` and bundles
-``VBCABLE_Setup_x64.exe`` into release ``LiveVocoder-Setup.exe``. On **native Windows**, VB-Cable **installs
-automatically** after the app files (no “opt-in” checkbox). The wizard has an **optional unchecked** task
-**“Skip VB-Audio Virtual Cable”** only if you must not run the driver installer. Silent installs run VB-Cable
-by default; use ``/MERGETASKS=skipvbcable`` to skip it.
-For local builds, place ``VBCABLE_Setup_x64.exe`` in ``cpp/installer/third_party/`` (extract from that zip
-or from https://vb-audio.com/Cable/ ) before ``bundle-installer-minimal.sh``. VB-Audio is donationware.
+**all** files from that zip (``.inf``, ``.cat``, ``.sys``, and ``VBCABLE_Setup_x64.exe``) under
+``{app}\extras\``. The VB-Audio setup **must** sit next to those files; the installer alone is not enough.
+On **native Windows**, VB-Cable **installs automatically** after the app files (no “opt-in” checkbox). The wizard
+has an **optional unchecked** task **“Skip VB-Audio Virtual Cable”** only if you must not run the driver installer.
+Silent installs run VB-Cable by default; use ``/MERGETASKS=skipvbcable`` to skip it.
+For local builds, extract the zip into ``cpp/installer/third_party/vbcable/`` (see ``third_party/README.txt``)
+before ``bundle-installer-minimal.sh``. VB-Audio is donationware.
 The bundled ``VBCABLE_Setup_x64.exe`` runs **with no silent flags** during a normal GUI setup (full VB-Audio wizard —
 most reliable for driver install in VMs). **``/SILENT``** / **``/VERYSILENT``** Live Vocoder installs still pass
 ``-i -h -H -n`` to VB-Cable so the wizard does not block automation. **``SW_SHOW``** (not hidden).
@@ -41,9 +42,16 @@ most reliable for driver install in VMs). **``/SILENT``** / **``/VERYSILENT``** 
 (no second ``runas`` hop). **``/CURRENTUSER``** (Wine / per-user) drops admin and VB uses **``ShellExec('runas', …)``**.
 Windows may still show **driver trust** / SmartScreen. **Note:** after ``runas``, exit code is often ``-1``.
 
+**If either installer or Windows says restart, reboot the PC (or VM) before testing OBS / Live Vocoder** — the
+virtual cable endpoints often do not show up in PortAudio until after a reboot.
+
 **If OBS has no “CABLE Input / Output”:** Approve **Windows Security** driver prompts during install. If you
-used **Skip**, or install failed, open ``C:\Program Files\Live Vocoder\extras\VBCABLE_Setup_x64.exe`` manually;
-then **restart OBS**. Check **Device Manager** for **VB-Audio Virtual Cable**.
+used **Skip**, or install failed, run ``VBCABLE_Setup_x64.exe`` from ``C:\Program Files\Live Vocoder\extras\``
+(leave the other VB-Audio files in that folder). Reboot if asked, then **restart OBS**. Check **Device Manager**
+for **VB-Audio Virtual Cable**.
+
+**If setup says “DeleteFile failed; code 5” for ``LiveVocoder.exe``:** Quit **Live Vocoder** (and anything using
+that folder), then choose **Try again**. The installer can also finish after a reboot if the file was locked.
 
 
 Smoke test (.f32 loads without starting audio)
@@ -55,7 +63,10 @@ Smoke test (.f32 loads without starting audio)
 
 Quick start (Windows)
 ---------------------
-1. Run ``LiveVocoder-Setup.exe`` and finish the wizard (or unzip/copy the whole folder).
+1. **Close Live Vocoder** before upgrading or reinstalling (avoids “access denied” when replacing
+   ``LiveVocoder.exe``). Run ``LiveVocoder-Setup.exe`` and finish the wizard. Do **not** check
+   **Skip VB-Audio Virtual Cable** unless you intend to skip the driver. **Reboot** if the Live Vocoder or
+   VB-Audio installer (or Windows) asks — then test OBS / Live Vocoder.
 2. Start Live Vocoder from the Start menu or run LiveVocoder.exe in:
    C:\Program Files\Live Vocoder\
 3. Pick a carrier (see below), choose Vocode or Clean mic, then press Start.

@@ -91,10 +91,11 @@ jobs:
           Expand-Archive -Path $zip -DestinationPath $stage -Force
           $setup = Join-Path $stage "VBCABLE_Setup_x64.exe"
           if (-not (Test-Path $setup)) { throw "VBCABLE_Setup_x64.exe missing in VB-Audio zip (layout changed?)" }
-          $dest = Join-Path $env:GITHUB_WORKSPACE "cpp/installer/third_party"
+          $dest = Join-Path $env:GITHUB_WORKSPACE "cpp/installer/third_party/vbcable"
           New-Item -ItemType Directory -Force -Path $dest | Out-Null
-          Copy-Item -Force $setup (Join-Path $dest "VBCABLE_Setup_x64.exe")
-          Write-Host "Bundled VB-Cable setup from official package (VB-Audio donationware — see vb-audio.com/Cable/)."
+          # VB-Audio's setup must see .inf/.cat/.sys beside the exe (running from Inno alone caused "Missing .inf").
+          Get-ChildItem -Path $stage -File | ForEach-Object { Copy-Item -Force $_.FullName (Join-Path $dest $_.Name) }
+          Write-Host "Bundled full VB-Cable driver pack into third_party/vbcable/ (VB-Audio donationware — see vb-audio.com/Cable/)."
 
       - name: Minimal SDL installer payload (6.0)
         shell: msys2 {0}

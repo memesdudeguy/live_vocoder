@@ -75,12 +75,18 @@ fi
 if [[ -f "${ROOT}/installer/LiveVocoder.ico" ]]; then
   cp -f "${ROOT}/installer/LiveVocoder.ico" "${DST}/"
 fi
-_vb_src="${ROOT}/installer/third_party/VBCABLE_Setup_x64.exe"
-if [[ -f "${_vb_src}" ]]; then
-  cp -f "${_vb_src}" "${DST}/extras/"
-  echo "bundle-installer-minimal: bundled VB-Audio Virtual Cable installer → ${DST}/extras/VBCABLE_Setup_x64.exe" >&2
+# VB-Audio's zip contains .inf/.cat/.sys next to VBCABLE_Setup_x64.exe; copying only the .exe breaks driver install.
+_vb_pack="${ROOT}/installer/third_party/vbcable"
+_vb_legacy="${ROOT}/installer/third_party/VBCABLE_Setup_x64.exe"
+if [[ -f "${_vb_pack}/VBCABLE_Setup_x64.exe" ]]; then
+  mkdir -p "${DST}/extras"
+  cp -f "${_vb_pack}/"* "${DST}/extras/"
+  echo "bundle-installer-minimal: bundled VB-Audio driver pack → ${DST}/extras/ ($(ls -1 "${DST}/extras" | wc -l) files)" >&2
+elif [[ -f "${_vb_legacy}" ]]; then
+  cp -f "${_vb_legacy}" "${DST}/extras/"
+  echo "bundle-installer-minimal: warning: only ${_vb_legacy} — extract the full VBCABLE_Driver_Pack*.zip into installer/third_party/vbcable/ so .inf files ship with the exe (see third_party/README.txt)." >&2
 else
-  echo "bundle-installer-minimal: optional VB-Cable not found (${_vb_src}) — native Windows virtual mic routing needs a manual install or drop VBCABLE_Setup_x64.exe in installer/third_party/ (see third_party/README.txt)." >&2
+  echo "bundle-installer-minimal: optional VB-Cable not found — add installer/third_party/vbcable/ (full zip contents) or legacy VBCABLE_Setup_x64.exe in third_party/ (see README.txt)." >&2
 fi
 if [[ -f "${SRC}/app-icon.png" ]]; then
   cp -f "${SRC}/app-icon.png" "${DST}/"
