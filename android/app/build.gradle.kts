@@ -11,7 +11,7 @@ android {
         applicationId = "com.livevocoder.app"
         minSdk = 24
         targetSdk = 35
-        versionCode = 7_000_000
+        versionCode = 7_000_001
         versionName = "7.0"
         archivesName = "LiveVocoder-v7.0"
     }

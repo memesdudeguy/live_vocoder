@@ -188,6 +188,18 @@ constexpr PresetDef kPresets[] = {
     {"Studio", 1.15, 5.0, 0.12f},
 };
 
+/** Basenames under Documents/LiveVocoderCarriers (or exe LiveVocoderCarriers). */
+struct CarrierPresetDef {
+    const char* label;
+    const char* filename;
+};
+constexpr CarrierPresetDef kCarrierPresets[] = {
+    {"Gangstas Paradise", "Gangstas Paradise (Instrumental) (1).f32"},
+    {"Hide", "Hide (CS01 Version).f32"},
+    {"Never Gonna", "Rick Astley - Never Gonna Give You Up (Official Video) (4K Remaster).f32"},
+};
+constexpr std::size_t kCarrierPresetCount = sizeof(kCarrierPresets) / sizeof(kCarrierPresets[0]);
+
 std::vector<double> load_carrier_f32(const char* path) {
     std::ifstream f(path, std::ios::binary);
     if (!f) {
@@ -790,6 +802,9 @@ struct Layout {
     float io_input_label_y = 0.f;
     float io_monitor_label_y = 0.f;
     int preset_ix_hover = -1;
+    float carrier_preset_label_y = 0.f;
+    std::array<SDL_FRect, kCarrierPresetCount> carrier_preset_chips{};
+    int carrier_preset_ix_hover = -1;
     int chip_hover = -1;
     int header_hover = -1;  // 0 start 1 stop 2 quit 3 help
     float clarity_label_y = 0.f;
@@ -881,7 +896,7 @@ Layout compute_layout(int ww, int wh, bool fonts_ok, TTF_Font* mfont) {
     }
 
     float card_h = wh - card_top - margin - 48.f;
-    card_h = std::max(fonts_ok ? 380.f : 260.f, card_h);
+    card_h = std::max(fonts_ok ? 440.f : 260.f, card_h);
     L.card = {margin, card_top, static_cast<float>(ww) - 2.f * margin, card_h};
 
     const float inner_x = L.card.x + L.card_pad;
@@ -898,11 +913,48 @@ Layout compute_layout(int ww, int wh, bool fonts_ok, TTF_Font* mfont) {
         }
         L.r_carrier_lib_btn = {inner_x + inner_w - cl_bw, y0 + 1.f, cl_bw, cl_bh};
     }
-    // Vertical rhythm: section, path, hint, divider, section, chips
-    L.divider_y0 = y0 + (fonts_ok ? 92.f : 40.f);
-    const float chip_y = y0 + (fonts_ok ? 118.f : 56.f);
     const float chip_h = 36.f;
     const float chip_gap = 10.f;
+    L.carrier_preset_label_y = y0 + (fonts_ok ? 76.f : 0.f);
+    const float carrier_chip_y = y0 + (fonts_ok ? 100.f : 0.f);
+    if (mfont != nullptr && fonts_ok) {
+        constexpr float kChipPadX = 14.f;
+        float cwidths[kCarrierPresetCount];
+        float ccontent = 0.f;
+        for (std::size_t i = 0; i < kCarrierPresetCount; ++i) {
+            int lw = 0;
+            (void)TTF_SizeUTF8(mfont, kCarrierPresets[i].label, &lw, nullptr);
+            cwidths[i] = std::max(44.f, static_cast<float>(lw) + kChipPadX * 2.f);
+            ccontent += cwidths[i];
+        }
+        ccontent += chip_gap * static_cast<float>(kCarrierPresetCount - 1);
+        float cscale = 1.f;
+        if (ccontent > inner_w && ccontent > 1.f) {
+            cscale = inner_w / ccontent;
+        }
+        float ctotal = 0.f;
+        for (std::size_t i = 0; i < kCarrierPresetCount; ++i) {
+            cwidths[i] = std::max(40.f, std::floor(cwidths[i] * cscale));
+            ctotal += cwidths[i];
+        }
+        ctotal += chip_gap * static_cast<float>(kCarrierPresetCount - 1);
+        float cx = inner_x + std::max(0.f, (inner_w - ctotal) * 0.5f);
+        for (std::size_t i = 0; i < kCarrierPresetCount; ++i) {
+            const float cw = cwidths[i];
+            L.carrier_preset_chips[i] = {cx, carrier_chip_y, cw, chip_h};
+            cx += cw + chip_gap;
+        }
+    } else if (fonts_ok) {
+        const float cw =
+            (inner_w - chip_gap * static_cast<float>(kCarrierPresetCount - 1)) / static_cast<float>(kCarrierPresetCount);
+        for (std::size_t i = 0; i < kCarrierPresetCount; ++i) {
+            L.carrier_preset_chips[i] = {
+                inner_x + static_cast<float>(i) * (cw + chip_gap), carrier_chip_y, cw, chip_h};
+        }
+    }
+    // Vertical rhythm: section, path, hint, carrier shortcuts, divider, quick sound chips
+    L.divider_y0 = y0 + (fonts_ok ? 150.f : 40.f);
+    const float chip_y = fonts_ok ? (L.divider_y0 + 26.f) : (y0 + 56.f);
     const int n = static_cast<int>(L.preset_chips.size());
 
     if (mfont != nullptr) {
@@ -1040,6 +1092,28 @@ int header_hit(int mx, int my, const Layout& L) {
 int preset_hit(int mx, int my, const Layout& L) {
     for (std::size_t i = 0; i < L.preset_chips.size(); ++i) {
         if (point_in_rect(mx, my, L.preset_chips[i])) {
+            return static_cast<int>(i);
+        }
+    }
+    return -1;
+}
+
+int carrier_preset_hit(int mx, int my, const Layout& L) {
+    for (std::size_t i = 0; i < kCarrierPresetCount; ++i) {
+        if (point_in_rect(mx, my, L.carrier_preset_chips[i])) {
+            return static_cast<int>(i);
+        }
+    }
+    return -1;
+}
+
+int carrier_preset_index_for_path(const std::string& path) {
+    if (path.empty()) {
+        return -1;
+    }
+    const std::string base = std::filesystem::path(path).filename().string();
+    for (std::size_t i = 0; i < kCarrierPresetCount; ++i) {
+        if (base == kCarrierPresets[i].filename) {
             return static_cast<int>(i);
         }
     }
@@ -1757,6 +1831,7 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
             meter_disp_out *= 0.82f;
         }
         lay.preset_ix_hover = preset_hit(mx, my, lay);
+        lay.carrier_preset_ix_hover = fonts_ok ? carrier_preset_hit(mx, my, lay) : -1;
         lay.header_hover = header_hit(mx, my, lay);
         const int io_hover = io_hit(mx, my, lay);
         const int slider_hover_ix = slider_drag >= 0 ? slider_drag : slider_hit(mx, my, lay);
@@ -1876,6 +1951,34 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
                         carrier_picker_open = false;
                     }
                 }
+                if (!consumed && fonts_ok) {
+                    const int cpi = carrier_preset_hit(cx, cy, L);
+                    if (cpi >= 0 && static_cast<std::size_t>(cpi) < kCarrierPresetCount) {
+                        std::filesystem::path want =
+                            lib / kCarrierPresets[static_cast<std::size_t>(cpi)].filename;
+#if defined(_WIN32)
+                        want = carrier_win32_localize_path_for_filesystem(want);
+#endif
+                        std::error_code fsec;
+                        if (carrier_f32_file_usable(want, fsec)) {
+                            if (streaming) {
+                                stop_stream();
+                            }
+                            carrier_path = want.string();
+                            carrier_label = kCarrierPresets[static_cast<std::size_t>(cpi)].filename;
+                            carrier_picker_open = false;
+                            refresh_title();
+                        } else {
+                            const std::string msg =
+                                std::string("Expected this file in your carrier folder "
+                                            "(Documents/LiveVocoderCarriers or next to the .exe):\n\n") +
+                                kCarrierPresets[static_cast<std::size_t>(cpi)].filename;
+                            sdl_show_themed_message_box(SDL_MESSAGEBOX_INFORMATION,
+                                                        "Live Vocoder — carrier preset", msg.c_str(), window);
+                        }
+                        consumed = true;
+                    }
+                }
                 if (!consumed) {
                 const int hh = header_hit(cx, cy, L);
                 if (hh == 0) {
@@ -1891,6 +1994,7 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
                                              "ffmpeg (install ffmpeg, PATH) to mono 48 kHz f32 under "
                                              "Documents/LiveVocoderCarriers.\n"
                                              "Use Library… in the voice card to pick a carrier from that folder.\n"
+                                             "Carrier presets (below the hint) jump to named .f32 files in that folder.\n"
                                              "On startup, that carrier folder is scanned: audio files become .f32 when "
                                              "the .f32 is missing or older than the audio file.\n"
                                              "Default: carrier.f32 in that folder or beside the .exe.\n"
@@ -1913,6 +2017,7 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
                                              "ffmpeg (install ffmpeg, PATH) to mono 48 kHz f32 under "
                                              "Documents/LiveVocoderCarriers.\n"
                                              "Use Library… in the voice card to pick a carrier from that folder.\n"
+                                             "Carrier presets (below the hint) jump to named .f32 files in that folder.\n"
                                              "On startup, that carrier folder is scanned: audio files become .f32 when "
                                              "the .f32 is missing or older than the audio file.\n"
                                              "Default: carrier.f32 in that folder or beside the .exe.\n"
@@ -2057,6 +2162,32 @@ int run_sdl_gui(char* argv0, const char* carrier_path_opt) {
                         kSection);
             ty += 24.f;
             blit_text(ren, fonts.small, "Pick a loop or pad; your mic shapes the spectrum.", kMuted, tx, ty);
+            blit_text(ren, fonts.small, "CARRIER PRESETS", kSection, tx, lay.carrier_preset_label_y);
+            {
+                const int active_c = carrier_preset_index_for_path(carrier_path);
+                for (std::size_t i = 0; i < kCarrierPresetCount; ++i) {
+                    const bool sel = active_c == static_cast<int>(i);
+                    const bool hv = lay.carrier_preset_ix_hover == static_cast<int>(i);
+                    Rgba face = sel ? kChipSelFace : kChipFace;
+                    Rgba border = sel ? kChipSelBorder : kChipBorder;
+                    if (hv && !sel) {
+                        lighten_rgba(face, 10);
+                        lighten_rgba(border, 18);
+                    } else if (hv && sel) {
+                        lighten_rgba(face, 8);
+                    }
+                    const SDL_FRect& cr = lay.carrier_preset_chips[i];
+                    const float rad = pill_corner_radius(cr);
+                    fill_round_rect(ren, cr, rad, face);
+                    stroke_round_round_rect_double(ren, cr, rad, border);
+                    int lw = 0, lh = 0;
+                    TTF_SizeUTF8(fonts.small, kCarrierPresets[i].label, &lw, &lh);
+                    const Rgba& tcol = sel ? kBrand : kMuted;
+                    blit_text(ren, fonts.small, kCarrierPresets[i].label, tcol,
+                              cr.x + (cr.w - static_cast<float>(lw)) * 0.5f,
+                              cr.y + (cr.h - static_cast<float>(lh)) * 0.5f);
+                }
+            }
 
             if (carrier_picker_open) {
                 const SDL_FRect pan = carrier_picker_panel_rect(lay, carrier_picker_entries.size());
