@@ -394,6 +394,17 @@ begin
   { Touching WizardForm during /SILENT or /VERYSILENT can surface the wizard on Wine. }
   if CurPageID = wpFinished then
   begin
+    if not WizardSilent then
+    begin
+      { So users know exactly which LiveVocoder-Setup.exe ran (Downloads vs Program Files copy, etc.). }
+      WizardForm.FinishedLabel.Caption := WizardForm.FinishedLabel.Caption + #13#10#13#10 +
+        'LiveVocoder-Setup.exe (this installer) was run from:'#13#10 + ExpandConstant('{srcexe}');
+#ifdef VBCableBundled
+      WizardForm.FinishedLabel.Caption := WizardForm.FinishedLabel.Caption + #13#10#13#10 +
+        'Bundled VB-Cable (double-click if it did not install automatically):'#13#10 +
+        ExpandConstant('{app}\extras\VBCABLE_Setup_x64.exe');
+#endif
+    end;
     if IsRunningUnderWine and (not WizardSilent) then
       WizardForm.RunList.Visible := False;
   end;
