@@ -20,6 +20,9 @@ void pa_log_all_devices_if_requested(FILE* out);
  *        sets Windows default recording device to CABLE Output when present (LIVE_VOCODER_WIN_DEFAULT_VIRT_MIC=0 to skip)
  *   else system default input/output
  * Output device must report at least 2 output channels (stereo).
+ * Native Windows: if the chosen mic and output use different PortAudio host APIs (e.g. MME vs WASAPI),
+ *   the duplex open is retargeted to one API (VB-Cable on the mic's API, else mic on the cable's API) so
+ *   Pa_OpenStream does not fail with paBadIODeviceCombination ("Illegal combination of I/O devices").
  */
 PaError pa_open_livevocoder_duplex(PaStream** stream, double sample_rate, unsigned long hop,
                                    PaStreamCallback callback, void* user_data);
