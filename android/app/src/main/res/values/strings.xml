@@ -8,4 +8,17 @@
     <string name="virtual_audio_title">Virtual audio on Android</string>
     <string name="virtual_audio_body">Android has no system-wide “virtual cable” like VB‑Cable on Windows. Apps use the mic (AudioRecord) and speakers (AudioTrack) or low-latency AAudio/Oboe.\n\nAndroid 10+ can capture other apps’ playback only when those apps allow it (AudioPlaybackCapture), often together with screen capture — not a generic loopback for every stream.\n\nFor routing to another device, use USB audio or Bluetooth. A future Live Vocoder engine here would use the mic permission and in-app processing — not a installable virtual driver.</string>
     <string name="open_releases">Open releases (downloads)</string>
+    <string name="check_apk_update">Check for APK update</string>
+    <string name="update_checking">Checking GitHub…</string>
+    <string name="update_up_to_date">You have the latest release (%1$s).</string>
+    <string name="update_available_title">Update available</string>
+    <string name="update_available_message">Version %1$s is on GitHub (you have %2$s). Download and install the APK?</string>
+    <string name="update_downloading">Downloading update…</string>
+    <string name="update_download_failed">Download failed: %1$s</string>
+    <string name="update_no_apk">Latest GitHub release has no .apk file. Open the releases page in the browser?</string>
+    <string name="update_api_failed">Could not reach GitHub: %1$s</string>
+    <string name="update_need_install_permission">Allow installing updates for this app (unknown sources), then try again.</string>
+    <string name="yes">Yes</string>
+    <string name="no">No</string>
+    <string name="ok">OK</string>
 </resources>
