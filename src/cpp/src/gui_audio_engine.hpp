@@ -2,6 +2,13 @@
 
 #include <portaudio.h>
 
+#if defined(_WIN32)
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#endif
+
 #include <algorithm>
 #include <atomic>
 #include <cmath>
@@ -17,7 +24,7 @@ namespace lv_gui {
 
 inline constexpr int kSampleRate = 48000;
 
-/** Parse once: PortAudio + vocoder hop (must divide 2048). Default 512 (~10.7 ms @ 48 kHz). */
+/** Parse once: PortAudio + vocoder hop (must divide 2048). Native Windows defaults to 256; Wine/Linux default 512. */
 inline int livevocoder_hop_frames() {
     static const int k_cached = [] {
         constexpr int k_n_fft = 2048;
@@ -43,6 +50,21 @@ inline int livevocoder_hop_frames() {
             }
             return 256;
         }
+#if defined(_WIN32)
+        /* Native Windows: 256-sample hops by default (~5.3 ms) for tighter monitoring; Wine unchanged. */
+        {
+            HMODULE ntdll = GetModuleHandleA("ntdll.dll");
+            const bool wine = ntdll != nullptr && GetProcAddress(ntdll, "wine_get_version") != nullptr;
+            if (!wine) {
+                const char* lag = std::getenv("LIVE_VOCODER_HIGH_LATENCY_HOP");
+                const bool force512 = lag != nullptr && lag[0] != '\0' && lag[0] != '0' &&
+                                      std::strcmp(lag, "false") != 0 && std::strcmp(lag, "no") != 0;
+                if (!force512) {
+                    return 256;
+                }
+            }
+        }
+#endif
         return k_default;
     }();
     return k_cached;

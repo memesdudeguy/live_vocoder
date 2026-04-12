@@ -118,7 +118,8 @@ static PaDeviceIndex pick_physical_speaker(PaDeviceIndex duplex_out) {
 
 static std::mutex g_q_mu;
 static std::deque<float> g_q;
-static constexpr std::size_t k_max_samples = 48000u * 2u;
+/* Cap queue so speaker monitor stays tight (~21 ms max @ 48 kHz stereo vs ~1 s before). */
+static constexpr std::size_t k_max_samples = 2048u;
 static std::atomic<bool> g_feed_armed{false};
 
 static int monitor_callback(const void*, void* output, unsigned long frames, const PaStreamCallbackTimeInfo*,
@@ -178,7 +179,13 @@ PaError pa_win32_monitor_output_start(PaStream** out_stream, double sample_rate,
     outp.device = sp;
     outp.channelCount = 2;
     outp.sampleFormat = paFloat32;
-    outp.suggestedLatency = oi->defaultHighOutputLatency;
+    {
+        const char* hi = std::getenv("LIVE_VOCODER_WIN_MONITOR_HIGH_LATENCY");
+        const bool want_high = hi != nullptr && hi[0] != '\0' && hi[0] != '0' &&
+                               std::strcmp(hi, "false") != 0 && std::strcmp(hi, "no") != 0;
+        outp.suggestedLatency =
+            want_high ? oi->defaultHighOutputLatency : oi->defaultLowOutputLatency;
+    }
     outp.hostApiSpecificStreamInfo = nullptr;
 
     PaStream* s = nullptr;
