@@ -32,14 +32,15 @@ exit /b 1
 
 :src_ok
 if not exist "dist-windows-installer-minimal" mkdir "dist-windows-installer-minimal"
+if not exist "dist-windows-installer-minimal\x64" mkdir "dist-windows-installer-minimal\x64"
 if not exist "dist-windows-installer-minimal\fonts" mkdir "dist-windows-installer-minimal\fonts"
-del /q "dist-windows-installer-minimal\*.dll" 2>nul
+del /q "dist-windows-installer-minimal\x64\*.dll" 2>nul
 if defined LV_EXE (
-  copy /Y "!LV_EXE!" "dist-windows-installer-minimal\LiveVocoder.exe" >nul
+  copy /Y "!LV_EXE!" "dist-windows-installer-minimal\x64\LiveVocoder.exe" >nul
 ) else (
-  copy /Y "%SRC%\LiveVocoder.exe" "dist-windows-installer-minimal\" >nul
+  copy /Y "%SRC%\LiveVocoder.exe" "dist-windows-installer-minimal\x64\" >nul
 )
-for %%f in ("%SRC%\*.dll") do copy /Y "%%f" "dist-windows-installer-minimal\" >nul
+for %%f in ("%SRC%\*.dll") do copy /Y "%%f" "dist-windows-installer-minimal\x64\" >nul
 if exist "installer\LiveVocoder.ico" copy /Y "installer\LiveVocoder.ico" "dist-windows-installer-minimal\" >nul
 if exist "%SRC%\app-icon.png" (
   copy /Y "%SRC%\app-icon.png" "dist-windows-installer-minimal\" >nul
@@ -47,7 +48,7 @@ if exist "%SRC%\app-icon.png" (
   copy /Y "assets\app-icon.png" "dist-windows-installer-minimal\" >nul
 )
 if exist "%SRC%\fonts\DejaVuSans.ttf" copy /Y "%SRC%\fonts\DejaVuSans.ttf" "dist-windows-installer-minimal\fonts\" >nul
-if exist "%SRC%\ffmpeg.exe" copy /Y "%SRC%\ffmpeg.exe" "dist-windows-installer-minimal\" >nul
+if exist "%SRC%\ffmpeg.exe" copy /Y "%SRC%\ffmpeg.exe" "dist-windows-installer-minimal\x64\" >nul
 
 if exist "installer\README_Cpp_Minimal.txt" (
   copy /Y "installer\README_Cpp_Minimal.txt" "dist-windows-installer-minimal\README_Cpp_Minimal.txt" >nul
@@ -56,6 +57,6 @@ if exist "installer\README_Cpp_Minimal.txt" (
   echo Live Vocoder C++ minimal - see project installer\README_Cpp_Minimal.txt > "dist-windows-installer-minimal\README_Cpp_Minimal.txt"
 )
 
-echo Staged from "%SRC%" — dist-windows-installer-minimal\
-dir /b "dist-windows-installer-minimal"
+echo Staged x64 payload from "%SRC%" — dist-windows-installer-minimal\x64\  (use bash bundle-installer-minimal.sh + LV_MINIMAL_ARM64_DIR for ARM64 in one installer^)
+dir /b "dist-windows-installer-minimal\x64"
 endlocal

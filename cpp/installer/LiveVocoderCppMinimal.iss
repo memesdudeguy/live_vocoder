@@ -14,12 +14,15 @@
 #define SetupEmbeddedShPrefix "/bin/sh"
 #define SetupEmbeddedBashPrefix "/bin/bash"
 #define MinimalRoot "..\dist-windows-installer-minimal"
+#ifexist "..\dist-windows-installer-minimal\arm64\LiveVocoder.exe"
+#define Arm64PayloadPresent
+#endif
 #ifexist "..\dist-windows-installer-minimal\extras\VBCABLE_Setup_x64.exe"
 #define VBCableBundled
 #endif
 
 [Setup]
-AppId=com.live_vocoder.LiveVocoder.cpp.sdl.x64
+AppId=com.live_vocoder.LiveVocoder.cpp.sdl.x64_arm64
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
@@ -41,8 +44,8 @@ VersionInfoCompany={#MyAppPublisher}
 VersionInfoDescription={#MyAppName} {#MyAppVersion} Setup
 Compression=lzma2/ultra64
 SolidCompression=yes
-ArchitecturesAllowed=x64compatible
-ArchitecturesInstallIn64BitMode=x64compatible
+ArchitecturesAllowed=x64compatible arm64
+ArchitecturesInstallIn64BitMode=x64compatible arm64
 DisableProgramGroupPage=yes
 ; Native Windows: require admin so VB-Cable runs via Exec (same token) — avoids flaky ShellExec('runas')
 ; and error 740 when the main setup was not elevated. Wine/automation: /CURRENTUSER still allowed below.
@@ -59,6 +62,8 @@ CloseApplications=yes
 RestartApplications=no
 ; Default yes would re-check "Skip VB-Audio Virtual Cable" after a user skipped it once — VB should default to installing.
 UsePreviousTasks=no
+; Windows 7 SP1+ only (PE/toolchain floor). XP/Vista are not supported by C++17, SDL2, or Inno Setup 6.
+MinVersion=6.1sp1
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -67,15 +72,20 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 #ifexist "..\dist-windows-installer-minimal\extras\VBCABLE_Setup_x64.exe"
 ; VB-Cable runs automatically after file install unless the user checks this (unchecked by default).
-Name: "skipvbcable"; Description: "Skip VB-Audio Virtual Cable (otherwise it installs automatically; driver trust may still appear)"; GroupDescription: "Windows native audio:"; Flags: unchecked; Check: not IsRunningUnderWine
+Name: "skipvbcable"; Description: "Skip VB-Audio Virtual Cable (otherwise it installs automatically; driver trust may still appear)"; GroupDescription: "Windows native audio:"; Flags: unchecked; Check: VbCableUiSupported
 #endif
 
 [Files]
 Source: "LiveVocoder.ico"; DestDir: "{app}"; Flags: ignoreversion
-; App + carrier converter: both must land in the same directory ({app}) so LiveVocoder.exe finds sibling ffmpeg.exe.
-Source: "{#MinimalRoot}\LiveVocoder.exe"; DestDir: "{app}"; Flags: ignoreversion restartreplace
-Source: "{#MinimalRoot}\ffmpeg.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#MinimalRoot}\*.dll"; DestDir: "{app}"; Flags: ignoreversion
+; App + carrier converter: x64 always; arm64 only when staged (CI unified build). [Code] picks arch on install.
+Source: "{#MinimalRoot}\x64\LiveVocoder.exe"; DestDir: "{app}"; Flags: ignoreversion restartreplace; Check: UseAmd64Payload
+Source: "{#MinimalRoot}\x64\ffmpeg.exe"; DestDir: "{app}"; Flags: ignoreversion; Check: UseAmd64Payload
+Source: "{#MinimalRoot}\x64\*.dll"; DestDir: "{app}"; Flags: ignoreversion; Check: UseAmd64Payload
+#ifdef Arm64PayloadPresent
+Source: "{#MinimalRoot}\arm64\LiveVocoder.exe"; DestDir: "{app}"; Flags: ignoreversion restartreplace; Check: UseArm64Payload
+Source: "{#MinimalRoot}\arm64\ffmpeg.exe"; DestDir: "{app}"; Flags: ignoreversion; Check: UseArm64Payload
+Source: "{#MinimalRoot}\arm64\*.dll"; DestDir: "{app}"; Flags: ignoreversion; Check: UseArm64Payload
+#endif
 Source: "{#MinimalRoot}\app-icon.png"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "{#MinimalRoot}\fonts\DejaVuSans.ttf"; DestDir: "{app}\fonts"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "{#MinimalRoot}\README_Cpp_Minimal.txt"; DestDir: "{app}"; DestName: "README.txt"; Flags: ignoreversion skipifsourcedoesntexist
@@ -110,7 +120,7 @@ Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{a
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 #ifdef VBCableBundled
 ; VB-Audio’s own UI — useful for levels / mute / troubleshooting (not a full Windows patchbay).
-Name: "{group}\VB-Audio Virtual Cable (Control Panel)"; Filename: "{app}\extras\VBCABLE_ControlPanel.exe"; WorkingDir: "{app}\extras"; Flags: createonlyiffileexists; Check: not IsRunningUnderWine
+Name: "{group}\VB-Audio Virtual Cable (Control Panel)"; Filename: "{app}\extras\VBCABLE_ControlPanel.exe"; WorkingDir: "{app}\extras"; Flags: createonlyiffileexists; Check: VbCableUiSupported
 #endif
 Name: "{commondesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\LiveVocoder.ico"; Tasks: desktopicon; Check: not IsRunningUnderWine
 
@@ -147,6 +157,40 @@ end;
 function IsRunningUnderWine: Boolean;
 begin
   Result := (FindHostBash <> '');
+end;
+
+function HaveArm64Payload: Boolean;
+begin
+#ifdef Arm64PayloadPresent
+  Result := True;
+#else
+  Result := False;
+#endif
+end;
+
+function IsNativeArm64Windows: Boolean;
+var
+  Arch: String;
+begin
+  Result := RegQueryStringValue(HKEY_LOCAL_MACHINE,
+    'SYSTEM\CurrentControlSet\Control\Session Manager\Environment',
+    'PROCESSOR_ARCHITECTURE', Arch) and (CompareText(Arch, 'ARM64') = 0);
+end;
+
+function UseArm64Payload: Boolean;
+begin
+  Result := (not IsRunningUnderWine) and IsNativeArm64Windows and HaveArm64Payload;
+end;
+
+function UseAmd64Payload: Boolean;
+begin
+  Result := not UseArm64Payload;
+end;
+
+{ VB-Audio Virtual Cable is x64-only; skip auto-install UI on native ARM64 (BlackHole etc. instead). }
+function VbCableUiSupported: Boolean;
+begin
+  Result := (not IsRunningUnderWine) and (not IsNativeArm64Windows);
 end;
 
 procedure WineRunHostHelper(const HelperBody: String);
@@ -399,7 +443,7 @@ begin
       InstallWineLauncherScript;
     end
 #ifdef VBCableBundled
-    else if (not WizardIsTaskSelected('skipvbcable')) and
+    else if VbCableUiSupported and (not WizardIsTaskSelected('skipvbcable')) and
             FileExists(ExpandConstant('{app}\extras\VBCABLE_Setup_x64.exe')) then
     begin
       { Silent -i -h -H -n often exits without installing the driver (VMs, policies). GUI install is reliable.
@@ -462,11 +506,17 @@ begin
       WizardForm.FinishedLabel.Caption := WizardForm.FinishedLabel.Caption + #13#10#13#10 +
         'LiveVocoder-Setup.exe (this installer) was run from:'#13#10 + ExpandConstant('{srcexe}');
 #ifdef VBCableBundled
-      WizardForm.FinishedLabel.Caption := WizardForm.FinishedLabel.Caption + #13#10#13#10 +
-        'Bundled VB-Cable (double-click if it did not install automatically):'#13#10 +
-        ExpandConstant('{app}\extras\VBCABLE_Setup_x64.exe') + #13#10#13#10 +
-        'VB-Audio control panel (levels / mute — handy for OBS routing debug):'#13#10 +
-        ExpandConstant('{app}\extras\VBCABLE_ControlPanel.exe');
+      if VbCableUiSupported then
+      begin
+        WizardForm.FinishedLabel.Caption := WizardForm.FinishedLabel.Caption + #13#10#13#10 +
+          'Bundled VB-Cable (double-click if it did not install automatically):'#13#10 +
+          ExpandConstant('{app}\extras\VBCABLE_Setup_x64.exe') + #13#10#13#10 +
+          'VB-Audio control panel (levels / mute — handy for OBS routing debug):'#13#10 +
+          ExpandConstant('{app}\extras\VBCABLE_ControlPanel.exe');
+      end
+      else if IsNativeArm64Windows then
+        WizardForm.FinishedLabel.Caption := WizardForm.FinishedLabel.Caption + #13#10#13#10 +
+          'Native ARM64 Windows: VB-Audio Virtual Cable (x64) is not auto-installed. Use BlackHole or another virtual audio device for OBS routing (see README_Wine_macOS.txt-style routing on Windows ARM).';
 #endif
     end;
     if IsRunningUnderWine and (not WizardSilent) then

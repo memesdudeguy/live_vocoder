@@ -7,12 +7,12 @@ mkdir -p "${ROOT}/dist-installer"
 
 bash "${ROOT}/bundle-installer-minimal.sh"
 
-if [[ ! -f "${ROOT}/dist-windows-installer-minimal/LiveVocoder.exe" ]]; then
-  echo "build-installer-minimal: missing dist-windows-installer-minimal/LiveVocoder.exe" >&2
+if [[ ! -f "${ROOT}/dist-windows-installer-minimal/x64/LiveVocoder.exe" ]]; then
+  echo "build-installer-minimal: missing dist-windows-installer-minimal/x64/LiveVocoder.exe (run bundle-installer-minimal.sh)." >&2
   exit 1
 fi
-if [[ ! -f "${ROOT}/dist-windows-installer-minimal/ffmpeg.exe" ]]; then
-  echo "build-installer-minimal: missing dist-windows-installer-minimal/ffmpeg.exe (required for carrier conversion on Windows)." >&2
+if [[ ! -f "${ROOT}/dist-windows-installer-minimal/x64/ffmpeg.exe" ]]; then
+  echo "build-installer-minimal: missing dist-windows-installer-minimal/x64/ffmpeg.exe (required for carrier conversion on Windows)." >&2
   exit 1
 fi
 

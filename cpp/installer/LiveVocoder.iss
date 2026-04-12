@@ -51,6 +51,8 @@ ArchitecturesInstallIn64BitMode=x64compatible
 DisableProgramGroupPage=yes
 PrivilegesRequiredOverridesAllowed=dialog
 WizardStyle=modern
+; Windows 7 SP1+ only (matches C++ build baseline). XP/Vista unsupported.
+MinVersion=6.1sp1
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"

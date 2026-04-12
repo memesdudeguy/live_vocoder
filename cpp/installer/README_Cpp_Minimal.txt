@@ -3,9 +3,12 @@ Live Vocoder — C++ SDL build (minimal installer)
 
 Made by memesdudeguy.
 
+**Supported Windows (native):** 64-bit **Windows 7 SP1** through **Windows 11** (including **ARM64** Windows where the unified installer ships an ARM64 payload). **Windows XP and Windows Vista are not supported** — the app uses C++17, current SDL2/PortAudio/FFTW binaries, TLS via the OS stack, and **Inno Setup 6**, none of which target those releases.
+
 Release 7.0 — ``build-installer-minimal.sh`` / ``.bat`` compile **one** minimal installer:
 
 - ``LiveVocoder-Setup.exe`` — use on **native Windows** or with **Wine** on **Linux** or **macOS** (Wine-only extras apply at install-time when the installer detects Wine). **macOS:** VB-Cable does not work — use **BlackHole** (see ``README_Wine_macOS.txt`` installed next to the app).
+  **One installer, two Windows CPU architectures:** GitHub Actions builds **x64** and **native ARM64** PE binaries; the same ``LiveVocoder-Setup.exe`` installs the matching tree (Wine/Linux hosts always use the x64 payload). Native **ARM64 Windows** skips auto VB-Cable (x64 driver); use BlackHole or similar.
   **ISCC** writes it to ``cpp/dist-installer/LiveVocoder-Setup.exe`` (relative to the repo). On the wizard **Finish**
   page (non-silent), the full path of the ``.exe`` you ran is shown, plus paths under ``extras\`` for
   ``VBCABLE_Setup_x64.exe`` and **``VBCABLE_ControlPanel.exe``** (VB-Audio’s own UI for debug).

@@ -104,12 +104,32 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
     target_sources(live_vocoder_cpp PRIVATE src/win_default_virt_mic.cpp src/pa_win32_monitor_out.cpp
         src/update_check_win.cpp)
     target_link_libraries(live_vocoder_cpp PRIVATE shell32 ole32 propsys oleaut32 winhttp)
+    # Win32 API baseline: Windows 7 SP1 (0x0601). XP/Vista are not supported by this SDL2/MinGW/C++17 toolchain.
+    target_compile_definitions(live_vocoder_cpp PRIVATE
+        _WIN32_WINNT=0x0601
+        WINVER=0x0601
+        NTDDI_VERSION=0x06010000
+    )
     # GUI subsystem: no console window on Windows or under Wine/CrossOver (MinGW: -mwindows).
+    # PE OS/subsystem 6.1 = Windows 7 (helps loaders; matches installer MinVersion).
     if(LIVE_VOCODER_CPP_SDL_GUI)
         if(MSVC)
-            target_link_options(live_vocoder_cpp PRIVATE "/SUBSYSTEM:WINDOWS")
+            target_link_options(live_vocoder_cpp PRIVATE "/SUBSYSTEM:WINDOWS,6.01")
         elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-            target_link_options(live_vocoder_cpp PRIVATE "-mwindows")
+            target_link_options(live_vocoder_cpp PRIVATE
+                "-mwindows"
+                "-Wl,--major-os-version=6,--minor-os-version=1"
+                "-Wl,--major-subsystem-version=6,--minor-subsystem-version=1"
+            )
+        endif()
+    else()
+        if(MSVC)
+            target_link_options(live_vocoder_cpp PRIVATE "/SUBSYSTEM:CONSOLE,6.01")
+        elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+            target_link_options(live_vocoder_cpp PRIVATE
+                "-Wl,--major-os-version=6,--minor-os-version=1"
+                "-Wl,--major-subsystem-version=6,--minor-subsystem-version=1"
+            )
         endif()
     endif()
     set(_lv_rc "${CMAKE_CURRENT_SOURCE_DIR}/installer/live_vocoder.rc")
@@ -170,6 +190,20 @@ if(LIVE_VOCODER_CPP_QT_GUI)
     if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
         target_sources(live_vocoder_qt PRIVATE src/win_default_virt_mic.cpp src/pa_win32_monitor_out.cpp)
         target_link_libraries(live_vocoder_qt PRIVATE shell32 ole32 propsys oleaut32)
+        target_compile_definitions(live_vocoder_qt PRIVATE
+            _WIN32_WINNT=0x0601
+            WINVER=0x0601
+            NTDDI_VERSION=0x06010000
+        )
+        if(MSVC)
+            target_link_options(live_vocoder_qt PRIVATE "/SUBSYSTEM:WINDOWS,6.01")
+        elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+            target_link_options(live_vocoder_qt PRIVATE
+                "-mwindows"
+                "-Wl,--major-os-version=6,--minor-os-version=1"
+                "-Wl,--major-subsystem-version=6,--minor-subsystem-version=1"
+            )
+        endif()
     endif()
     target_compile_options(live_vocoder_qt PRIVATE ${FFTW_CFLAGS_OTHER} ${PORTAUDIO_CFLAGS_OTHER})
     set_target_properties(live_vocoder_qt PROPERTIES OUTPUT_NAME "LiveVocoderQt")

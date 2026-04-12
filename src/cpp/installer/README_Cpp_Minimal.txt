@@ -3,9 +3,12 @@ Live Vocoder — C++ SDL build (minimal installer)
 
 Made by memesdudeguy.
 
+**Supported Windows (native):** 64-bit **Windows 7 SP1** through **Windows 11** (including **ARM64** Windows where the unified installer ships an ARM64 payload). **Windows XP and Windows Vista are not supported** — the app uses C++17, current SDL2/PortAudio/FFTW binaries, TLS via the OS stack, and **Inno Setup 6**, none of which target those releases.
+
 Release 7.0 — ``build-installer-minimal.sh`` / ``.bat`` compile **one** minimal installer:
 
-- ``LiveVocoder-Setup.exe`` — use on **native Windows** or with **Wine** on Linux (Wine-only extras apply at install-time when the installer detects Wine).
+- ``LiveVocoder-Setup.exe`` — use on **native Windows** or with **Wine** on **Linux** or **macOS** (Wine-only extras apply at install-time when the installer detects Wine). **macOS:** VB-Cable does not work — use **BlackHole** (see ``README_Wine_macOS.txt`` installed next to the app).
+  **One installer, two Windows CPU architectures:** GitHub Actions builds **x64** and **native ARM64** PE binaries; the same ``LiveVocoder-Setup.exe`` installs the matching tree (Wine/Linux hosts always use the x64 payload). Native **ARM64 Windows** skips auto VB-Cable (x64 driver); use BlackHole or similar.
   **ISCC** writes it to ``cpp/dist-installer/LiveVocoder-Setup.exe`` (relative to the repo). On the wizard **Finish**
   page (non-silent), the full path of the ``.exe`` you ran is shown, plus paths under ``extras\`` for
   ``VBCABLE_Setup_x64.exe`` and **``VBCABLE_ControlPanel.exe``** (VB-Audio’s own UI for debug).
@@ -15,6 +18,12 @@ On GitHub Actions, workflow “Build C++ Windows EXE” uploads artifact ``LiveV
 (keep them next to the ``.exe``; run ``/bin/sh ./sh-LiveVocoder-Setup.sh`` to use ``~/.wine-livevocoder``, auto-``wineboot``,
 and a **wine32** check — avoids a broken ``~/.wine`` blocking setup).
 Pushing a tag matching ``v*`` attaches those files plus ``LiveVocoder_Setup_7.0.exe`` (full installer) to the Release.
+
+**Auto-update (native Windows only):** ``LiveVocoder.exe`` asks GitHub’s API for the latest release and compares the
+``LiveVocoder-Setup.exe`` asset’s ``updated_at`` to the running exe’s file time (and the release tag to the embedded
+version). If a newer build is available, a Yes/No dialog offers to download the installer to ``%TEMP%`` and launch it.
+This is skipped under **Wine** (same as other Win32-only paths). Set **``LIVE_VOCODER_NO_AUTO_UPDATE=1``** to disable.
+Forks can set **``LIVE_VOCODER_UPDATE_REPO=owner/repo``** (default ``memesdudeguy/live_vocoder``).
 
 What you get
 ------------
@@ -26,7 +35,8 @@ the app uses Windows ffmpeg.exe and host PipeWire via the installer’s Wine-onl
 **Wine prerequisite (Debian/Ubuntu):** install **``wine32``** after ``dpkg --add-architecture i386``, or you may get
 ``kernel32.dll`` / ``c0000135`` errors — see **``README_Wine.txt``** (from the installer) or repo **``scripts/check-wine-livevocoder-host.sh``**.
 **Native Windows** can auto-route playback to VB-Audio Virtual Cable (CABLE Input) when installed; **under Wine**
-that heuristic is off—use ``PULSE_SINK`` / null-sink routing on the Linux host instead.
+that heuristic is off—use ``PULSE_SINK`` / null-sink routing on the **Linux** host instead. **macOS + Wine:** use
+**BlackHole** + **Multi-Output Device** in Audio MIDI Setup (see ``README_Wine_macOS.txt``); ``live-vocoder-wine-launch.sh`` skips ``pactl`` on Darwin.
 
 **VB-Cable in the setup:** GitHub Actions downloads the official ``VBCABLE_Driver_Pack45.zip`` and bundles
 **all** files from that zip (``.inf``, ``.cat``, ``.sys``, and ``VBCABLE_Setup_x64.exe``) under

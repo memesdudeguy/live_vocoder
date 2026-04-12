@@ -7,12 +7,12 @@ mkdir -p "${ROOT}/dist-installer"
 
 bash "${ROOT}/bundle-installer-minimal.sh"
 
-if [[ ! -f "${ROOT}/dist-windows-installer-minimal/LiveVocoder.exe" ]]; then
-  echo "build-installer-minimal: missing dist-windows-installer-minimal/LiveVocoder.exe" >&2
+if [[ ! -f "${ROOT}/dist-windows-installer-minimal/x64/LiveVocoder.exe" ]]; then
+  echo "build-installer-minimal: missing dist-windows-installer-minimal/x64/LiveVocoder.exe (run bundle-installer-minimal.sh)." >&2
   exit 1
 fi
-if [[ ! -f "${ROOT}/dist-windows-installer-minimal/ffmpeg.exe" ]]; then
-  echo "build-installer-minimal: missing dist-windows-installer-minimal/ffmpeg.exe (required for carrier conversion on Windows)." >&2
+if [[ ! -f "${ROOT}/dist-windows-installer-minimal/x64/ffmpeg.exe" ]]; then
+  echo "build-installer-minimal: missing dist-windows-installer-minimal/x64/ffmpeg.exe (required for carrier conversion on Windows)." >&2
   exit 1
 fi
 
@@ -107,7 +107,7 @@ if [[ -n "$_setup_exe" ]]; then
     echo "Version=1.0"
     echo "Type=Application"
     echo "Name=Live Vocoder C++ Setup (Wine)"
-    echo "Comment=Minimal installer — checks wine32 then runs LiveVocoder-Setup.exe"
+    echo "Comment=Minimal installer — Wine prefix ~/.wine-livevocoder, wineboot if new, wine32 check"
     echo "Exec=/bin/sh \"${_sh_abs}\""
     echo "Icon=${_ic_abs}"
     echo "Categories=AudioVideo;Audio;Mixer;"

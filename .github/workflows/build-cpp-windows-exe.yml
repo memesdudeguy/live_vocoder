@@ -1,10 +1,10 @@
 # Native C++ vocoder: Windows PE .exe + MinGW DLLs (same folder runs on Windows and under Wine).
 # Artifacts (AppVersion 7.0 from installer scripts):
-#   - LiveVocoder-full-setup-v7.0 — full portable + Python (LiveVocoder_Setup_7.0.exe)
-#   - LiveVocoder-Cpp-setup-v7.0 — SDL-only minimal installers (Windows + Wine host)
+#   - LiveVocoder-full-setup-v7.0 — full portable + Python (LiveVocoder_Setup_7.0.exe), x64 only
+#   - LiveVocoder-Cpp-setup-v7.0 — unified minimal installer: x64 + native ARM64 payloads in one LiveVocoder-Setup.exe
+#   - win-pe-amd64-v7.0 / win-pe-arm64-v7.0 — internal PE trees for the unified minimal build
 #
-# Publish a GitHub Release (uploads both .exe): create and push a version tag, e.g.
-#   git tag v7.0 && git push origin v7.0
+# Publish a GitHub Release: push a version tag, e.g.   git tag v7.0 && git push origin v7.0
 name: Build C++ Windows EXE
 
 on:
@@ -62,6 +62,10 @@ jobs:
           mkdir -p cpp/dist-windows/fonts
           cp -f /mingw64/share/fonts/TTF/DejaVuSans.ttf cpp/dist-windows/fonts/
 
+      - name: Add ffmpeg next to x64 LiveVocoder.exe (minimal + portable)
+        shell: msys2 {0}
+        run: cp -f /mingw64/bin/ffmpeg.exe "$GITHUB_WORKSPACE/cpp/dist-windows/ffmpeg.exe"
+
       - name: Full portable tree (embeddable Python + app) for installer
         shell: msys2 {0}
         run: |
@@ -80,7 +84,7 @@ jobs:
           if (-not (Test-Path $iscc)) { throw "ISCC.exe not found after choco install innosetup" }
           & $iscc "$env:GITHUB_WORKSPACE\cpp\installer\LiveVocoder.iss"
 
-      - name: Fetch VB-Cable (official zip) for minimal installer bundle
+      - name: Fetch VB-Cable (official zip) for unified minimal installer bundle
         shell: pwsh
         run: |
           $zipUrl = "https://download.vb-audio.com/Download_CABLE/VBCABLE_Driver_Pack45.zip"
@@ -93,36 +97,14 @@ jobs:
           if (-not (Test-Path $setup)) { throw "VBCABLE_Setup_x64.exe missing in VB-Audio zip (layout changed?)" }
           $dest = Join-Path $env:GITHUB_WORKSPACE "cpp/installer/third_party/vbcable"
           New-Item -ItemType Directory -Force -Path $dest | Out-Null
-          # VB-Audio's setup must see .inf/.cat/.sys beside the exe (running from Inno alone caused "Missing .inf").
           Get-ChildItem -Path $stage -File | ForEach-Object { Copy-Item -Force $_.FullName (Join-Path $dest $_.Name) }
-          Write-Host "Bundled full VB-Cable driver pack into third_party/vbcable/ (VB-Audio donationware — see vb-audio.com/Cable/)."
+          Write-Host "Bundled full VB-Cable driver pack into third_party/vbcable/."
 
-      - name: Minimal SDL installer payload (7.0)
-        shell: msys2 {0}
-        run: |
-          set -euo pipefail
-          cp -f /mingw64/bin/ffmpeg.exe "$GITHUB_WORKSPACE/cpp/dist-windows/ffmpeg.exe"
-          export LV_MINIMAL_EXE="$GITHUB_WORKSPACE/cpp/dist-windows/LiveVocoder.exe"
-          cd "$GITHUB_WORKSPACE/cpp"
-          bash bundle-installer-minimal.sh
-
-      - name: Compile minimal Inno installer (Windows + Wine, single .exe)
-        shell: powershell
-        run: |
-          $iscc = Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe"
-          if (-not (Test-Path $iscc)) {
-            $iscc = Join-Path $env:ProgramFiles "Inno Setup 6\ISCC.exe"
-          }
-          if (-not (Test-Path $iscc)) { throw "ISCC.exe not found for minimal installer" }
-          $iss = Join-Path $env:GITHUB_WORKSPACE "cpp\installer\LiveVocoderCppMinimal.iss"
-          & $iscc $iss
-
-      - name: Stage Linux Wine companion scripts next to minimal installer
-        shell: pwsh
-        run: |
-          $d = Join-Path $env:GITHUB_WORKSPACE "cpp/dist-installer"
-          Copy-Item -Force (Join-Path $env:GITHUB_WORKSPACE "cpp/installer/sh-LiveVocoder-Setup.sh") $d
-          Copy-Item -Force (Join-Path $env:GITHUB_WORKSPACE "scripts/check-wine-livevocoder-host.sh") $d
+      - name: Upload x64 PE folder (for unified LiveVocoder-Setup.exe)
+        uses: actions/upload-artifact@v4
+        with:
+          name: win-pe-amd64-v7.0
+          path: cpp/dist-windows/
 
       - name: Upload portable folder (exe + DLLs + Python for Wine / Windows)
         uses: actions/upload-artifact@v4
@@ -136,6 +118,142 @@ jobs:
           name: LiveVocoder-full-setup-v7.0
           path: cpp/dist-installer/LiveVocoder_Setup_*.exe
 
+  mingw_arm64:
+    runs-on: windows-11-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Regenerate LiveVocoder.ico from assets (Pillow)
+        shell: pwsh
+        run: |
+          python -m pip install --user -q pillow
+          python cpp/installer/gen_livevocoder_ico.py
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: CLANGARM64
+          update: true
+          install: >-
+            mingw-w64-clang-aarch64-cmake
+            mingw-w64-clang-aarch64-ninja
+            mingw-w64-clang-aarch64-clang
+            mingw-w64-clang-aarch64-lld
+            mingw-w64-clang-aarch64-pkg-config
+            mingw-w64-clang-aarch64-fftw
+            mingw-w64-clang-aarch64-portaudio
+            mingw-w64-clang-aarch64-SDL2
+            mingw-w64-clang-aarch64-SDL2_ttf
+            mingw-w64-clang-aarch64-ttf-dejavu
+            mingw-w64-clang-aarch64-ffmpeg
+
+      - name: Configure & build (ARM64 Windows)
+        shell: msys2 {0}
+        run: |
+          cd cpp
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release .
+          cmake --build build
+
+      - name: Bundle DLLs + output tree (ARM64)
+        shell: msys2 {0}
+        run: |
+          export LIVE_VOCODER_WIN_DIST="$GITHUB_WORKSPACE/cpp/dist-windows-arm64"
+          bash cpp/bundle-mingw.sh
+
+      - name: Font + ffmpeg for ARM64 payload
+        shell: msys2 {0}
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/cpp/dist-windows-arm64/fonts"
+          cp -f /clangarm64/share/fonts/TTF/DejaVuSans.ttf "$GITHUB_WORKSPACE/cpp/dist-windows-arm64/fonts/"
+          cp -f /clangarm64/bin/ffmpeg.exe "$GITHUB_WORKSPACE/cpp/dist-windows-arm64/ffmpeg.exe"
+
+      - name: Upload ARM64 PE folder
+        uses: actions/upload-artifact@v4
+        with:
+          name: win-pe-arm64-v7.0
+          path: cpp/dist-windows-arm64/
+
+  minimal_unified:
+    needs: [mingw64, mingw_arm64]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup -y --no-progress
+
+      - name: Download x64 PE artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: win-pe-amd64-v7.0
+          path: _pe_amd64
+
+      - name: Download ARM64 PE artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: win-pe-arm64-v7.0
+          path: _pe_arm64
+
+      - name: Fetch VB-Cable pack for bundle
+        shell: pwsh
+        run: |
+          $zipUrl = "https://download.vb-audio.com/Download_CABLE/VBCABLE_Driver_Pack45.zip"
+          $stage = Join-Path $env:RUNNER_TEMP "vb-cable-pack"
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          $zip = Join-Path $stage "VBCABLE_Driver_Pack45.zip"
+          Invoke-WebRequest -Uri $zipUrl -OutFile $zip
+          Expand-Archive -Path $zip -DestinationPath $stage -Force
+          $dest = Join-Path $env:GITHUB_WORKSPACE "cpp/installer/third_party/vbcable"
+          New-Item -ItemType Directory -Force -Path $dest | Out-Null
+          Get-ChildItem -Path $stage -File | ForEach-Object { Copy-Item -Force $_.FullName (Join-Path $dest $_.Name) }
+
+      - name: Regenerate LiveVocoder.ico (matches repo assets)
+        shell: pwsh
+        run: |
+          python -m pip install --user -q pillow
+          python cpp/installer/gen_livevocoder_ico.py
+
+      - name: Assemble dist-windows-installer-minimal (x64 + arm64)
+        shell: bash
+        env:
+          PYTHON_CMD: python
+          LV_SKIP_PE_CHECK: '1'
+        run: |
+          set -euo pipefail
+          export LV_MINIMAL_X64_DIR="$GITHUB_WORKSPACE/_pe_amd64"
+          export LV_MINIMAL_ARM64_DIR="$GITHUB_WORKSPACE/_pe_arm64"
+          if [[ ! -f "$LV_MINIMAL_X64_DIR/LiveVocoder.exe" ]]; then
+            echo "missing x64 LiveVocoder.exe under _pe_amd64" >&2
+            ls -la "$LV_MINIMAL_X64_DIR" >&2 || true
+            exit 1
+          fi
+          if [[ ! -f "$LV_MINIMAL_ARM64_DIR/LiveVocoder.exe" ]]; then
+            echo "missing arm64 LiveVocoder.exe under _pe_arm64" >&2
+            ls -la "$LV_MINIMAL_ARM64_DIR" >&2 || true
+            exit 1
+          fi
+          cd "$GITHUB_WORKSPACE/cpp"
+          bash bundle-installer-minimal.sh
+
+      - name: Compile minimal Inno installer (unified x64 + ARM64)
+        shell: pwsh
+        run: |
+          $iscc = Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { $iscc = Join-Path $env:ProgramFiles "Inno Setup 6\ISCC.exe" }
+          if (-not (Test-Path $iscc)) { throw "ISCC.exe not found" }
+          & $iscc "$env:GITHUB_WORKSPACE\cpp\installer\LiveVocoderCppMinimal.iss"
+
+      - name: Stage Linux Wine companion scripts next to minimal installer
+        shell: pwsh
+        run: |
+          $d = Join-Path $env:GITHUB_WORKSPACE "cpp/dist-installer"
+          Copy-Item -Force (Join-Path $env:GITHUB_WORKSPACE "cpp/installer/sh-LiveVocoder-Setup.sh") $d
+          Copy-Item -Force (Join-Path $env:GITHUB_WORKSPACE "scripts/check-wine-livevocoder-host.sh") $d
+
       - name: Upload minimal C++ installers (7.0)
         uses: actions/upload-artifact@v4
         with:
@@ -147,7 +265,7 @@ jobs:
 
   release:
     name: Publish GitHub Release (tag builds only)
-    needs: mingw64
+    needs: [mingw64, minimal_unified]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:

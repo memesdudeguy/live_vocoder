@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Run inside MSYS2 MINGW64 after cmake --build. Copies exe + MinGW DLLs for Windows / Wine.
+# Run inside MSYS2 MINGW64 or CLANGARM64 after cmake --build. Copies exe + MinGW DLLs for Windows / Wine.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-EXE="$ROOT/build/LiveVocoder.exe"
-OUT="$ROOT/dist-windows"
+EXE="${LIVE_VOCODER_WIN_EXE:-$ROOT/build/LiveVocoder.exe}"
+OUT="${LIVE_VOCODER_WIN_DIST:-$ROOT/dist-windows}"
 if [[ ! -f "$EXE" ]]; then
   echo "missing $EXE" >&2
   exit 1
