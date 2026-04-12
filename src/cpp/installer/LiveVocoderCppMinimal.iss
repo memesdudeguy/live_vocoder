@@ -57,6 +57,8 @@ WizardImageBackColor=#0b0e14
 WizardSmallImageBackColor=#0b0e14
 CloseApplications=yes
 RestartApplications=no
+; Default yes would re-check "Skip VB-Audio Virtual Cable" after a user skipped it once — VB should default to installing.
+UsePreviousTasks=no
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
