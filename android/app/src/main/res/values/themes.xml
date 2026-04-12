@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.LiveVocoder" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/lv_primary</item>
+        <item name="colorPrimaryContainer">@color/lv_primary_container</item>
+        <item name="android:statusBarColor">@color/lv_bg</item>
+        <item name="android:navigationBarColor">@color/lv_bg</item>
+        <item name="android:windowBackground">@color/lv_bg</item>
+    </style>
+</resources>

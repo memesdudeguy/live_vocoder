@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Live Vocoder</string>
+    <string name="version_line">Release 7.0</string>
+    <string name="android_scope_body">This Android package is version 7.0 and matches the desktop release line. The full real-time vocoder (SDL, PortAudio, FFTW) runs on Windows, Linux, and macOS. An on-device audio engine for Android is not bundled here yet.</string>
+    <string name="open_releases">Open releases (downloads)</string>
+</resources>

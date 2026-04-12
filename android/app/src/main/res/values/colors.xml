@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Near desktop SDL palette (sdl_gui.cpp) -->
+    <color name="lv_bg">#FF0B0E14</color>
+    <color name="lv_primary">#FF7C9CF0</color>
+    <color name="lv_primary_container">#FF252836</color>
+</resources>

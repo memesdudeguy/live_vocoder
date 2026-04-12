@@ -37,6 +37,8 @@ Optional CMake: ``-DLIVE_VOCODER_CPP_SDL_GUI=OFF`` for a build with only ``--min
 
 **Optional Qt GUI:** ``cmake -B build -DLIVE_VOCODER_CPP_QT_GUI=ON`` (needs **Qt6 Widgets** / ``qt6-base``). Build target ``live_vocoder_qt`` → ``build/LiveVocoderQt.exe``: scrolling **mic vs output** level graph (dB-scaled), Start/Stop, Monitor, Clean mic, carrier file picker, test beep. Uses Fusion + stylesheet so **pressed/hover states snap** (no animated transitions).
 
+**Android APK (release line 7.0):** Gradle project under ``android/`` — ``./gradlew assembleDebug`` → ``LiveVocoder-v7.0-debug.apk`` (see ``android/README.md``). This package is **version 7.0** for distribution alongside desktop; it does **not** embed the PortAudio/FFTW/SDL vocoder yet (companion / downloads entry point).
+
 Dependencies (Linux): build-essential cmake pkg-config libfftw3-dev portaudio19-dev
   libsdl2-dev libsdl2-ttf-dev, and **ffmpeg** for non-.f32 carriers
 
