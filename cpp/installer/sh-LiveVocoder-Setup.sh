@@ -20,6 +20,24 @@ if [ -z "$SETUP" ]; then
   echo "Run with embedded sh prefix: ${_EMBED_SH_PREFIX} \"$DIR/sh-LiveVocoder-Setup.sh\"" >&2
   exit 1
 fi
+# Debian/Ubuntu: wine32 + multiarch — without it, wine often fails with kernel32.dll c0000135.
+_CHECK="$DIR/check-wine-livevocoder-host.sh"
+if [ -f "$_CHECK" ]; then
+  /bin/sh "$_CHECK" || exit $?
+else
+  if command -v dpkg >/dev/null 2>&1 && command -v apt-get >/dev/null 2>&1; then
+    if ! dpkg -l 2>/dev/null | grep -qE '^ii\s+wine32(:i386)?\s'; then
+      echo "Wine: wine32 may be missing (common cause of kernel32.dll / c0000135)." >&2
+      echo "  sudo dpkg --add-architecture i386 && sudo apt-get update" >&2
+      echo "  sudo apt-get install -y wine wine64 wine32" >&2
+      echo "  rm -rf ~/.wine && WINEARCH=win64 wineboot -u" >&2
+    fi
+  fi
+  if ! WINEDEBUG=-all wine64 cmd /c exit 0 2>/dev/null && ! WINEDEBUG=-all wine cmd /c exit 0 2>/dev/null; then
+    echo "Wine failed a quick probe. Install wine32 (see above) or place check-wine-livevocoder-host.sh next to this script." >&2
+    exit 1
+  fi
+fi
 export WINEPREFIX="${WINEPREFIX:-$HOME/.wine}"
 # Host PipeWire/Pulse: tear down LiveVocoder virtual stack (loopbacks → mic → sinks) so Wine/Setup does not
 # inherit duplicate devices or a stale live_vocoder.monitor → speakers route.

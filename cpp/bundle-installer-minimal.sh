@@ -110,6 +110,14 @@ if ! python3 "${ROOT}/installer/gen_smoke_carrier_f32.py" "${DST}/smoke_carrier.
   echo "bundle-installer-minimal: gen_smoke_carrier_f32.py failed (need python3)." >&2
   exit 1
 fi
+if [[ -f "${ROOT}/../scripts/check-wine-livevocoder-host.sh" ]]; then
+  cp -f "${ROOT}/../scripts/check-wine-livevocoder-host.sh" "${DST}/check-wine-livevocoder-host.sh"
+  chmod +x "${DST}/check-wine-livevocoder-host.sh"
+fi
+if [[ -f "${ROOT}/installer/sh-LiveVocoder-Setup.sh" ]]; then
+  cp -f "${ROOT}/installer/sh-LiveVocoder-Setup.sh" "${DST}/sh-LiveVocoder-Setup.sh"
+  chmod +x "${DST}/sh-LiveVocoder-Setup.sh"
+fi
 if [[ -f "${ROOT}/installer/README_Cpp_Minimal.txt" ]]; then
   cp -f "${ROOT}/installer/README_Cpp_Minimal.txt" "${DST}/README_Cpp_Minimal.txt"
 else

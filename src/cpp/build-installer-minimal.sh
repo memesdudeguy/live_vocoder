@@ -90,24 +90,28 @@ if [[ -f "${ROOT}/dist-installer/LiveVocoder-Setup.exe" ]]; then
 else
   _setup_exe="$(ls -1t "${ROOT}/dist-installer"/LiveVocoder_Cpp_Setup_*.exe 2>/dev/null | head -1)"
 fi
+cp -f "${ROOT}/installer/sh-LiveVocoder-Setup.sh" "${ROOT}/dist-installer/sh-LiveVocoder-Setup.sh"
+chmod +x "${ROOT}/dist-installer/sh-LiveVocoder-Setup.sh"
+if [[ -f "${ROOT}/../scripts/check-wine-livevocoder-host.sh" ]]; then
+  cp -f "${ROOT}/../scripts/check-wine-livevocoder-host.sh" "${ROOT}/dist-installer/check-wine-livevocoder-host.sh"
+  chmod +x "${ROOT}/dist-installer/check-wine-livevocoder-host.sh"
+fi
 if [[ -n "$_setup_exe" ]]; then
   cp -f "${ROOT}/installer/LiveVocoder.ico" "${ROOT}/dist-installer/LiveVocoder.ico"
   _ic_abs="$(readlink -f "${ROOT}/dist-installer/LiveVocoder.ico")"
   _ex_abs="$(readlink -f "$_setup_exe")"
+  _sh_abs="$(readlink -f "${ROOT}/dist-installer/sh-LiveVocoder-Setup.sh")"
   _desk="${ROOT}/dist-installer/LiveVocoder_Cpp_Setup_Wine.desktop"
   {
     echo "[Desktop Entry]"
     echo "Version=1.0"
     echo "Type=Application"
     echo "Name=Live Vocoder C++ Setup (Wine)"
-    echo "Comment=Minimal installer — wine LiveVocoder-Setup.exe"
-    echo "Exec=wine \"${_ex_abs}\""
+    echo "Comment=Minimal installer — checks wine32 then runs LiveVocoder-Setup.exe"
+    echo "Exec=/bin/sh \"${_sh_abs}\""
     echo "Icon=${_ic_abs}"
     echo "Categories=AudioVideo;Audio;Mixer;"
   } >"$_desk"
   chmod 755 "$_desk"
   echo "Linux launcher (Wine installer): $_desk" >&2
 fi
-
-cp -f "${ROOT}/installer/sh-LiveVocoder-Setup.sh" "${ROOT}/dist-installer/sh-LiveVocoder-Setup.sh"
-chmod +x "${ROOT}/dist-installer/sh-LiveVocoder-Setup.sh"

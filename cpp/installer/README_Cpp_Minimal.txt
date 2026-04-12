@@ -10,8 +10,10 @@ Release 6.0 — ``build-installer-minimal.sh`` / ``.bat`` compile **one** minima
   page (non-silent), the full path of the ``.exe`` you ran is shown, plus the path to bundled
   ``extras\VBCABLE_Setup_x64.exe`` if VB-Cable did not install automatically.
 
-On GitHub Actions, workflow “Build C++ Windows EXE” uploads it as artifact ``LiveVocoder-Cpp-setup-v6.0``.
-Pushing a tag matching ``v*`` attaches it plus ``LiveVocoder_Setup_6.0.exe`` (full installer) to the Release.
+On GitHub Actions, workflow “Build C++ Windows EXE” uploads artifact ``LiveVocoder-Cpp-setup-v6.0`` with
+``LiveVocoder-Setup.exe`` plus **Linux helpers** ``sh-LiveVocoder-Setup.sh`` and ``check-wine-livevocoder-host.sh``
+(keep them next to the ``.exe``; run ``/bin/sh ./sh-LiveVocoder-Setup.sh`` to install under Wine with a **wine32** check).
+Pushing a tag matching ``v*`` attaches those files plus ``LiveVocoder_Setup_6.0.exe`` (full installer) to the Release.
 
 What you get
 ------------

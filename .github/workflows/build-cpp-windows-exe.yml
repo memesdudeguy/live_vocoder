@@ -116,6 +116,13 @@ jobs:
           $iss = Join-Path $env:GITHUB_WORKSPACE "cpp\installer\LiveVocoderCppMinimal.iss"
           & $iscc $iss
 
+      - name: Stage Linux Wine companion scripts next to minimal installer
+        shell: pwsh
+        run: |
+          $d = Join-Path $env:GITHUB_WORKSPACE "cpp/dist-installer"
+          Copy-Item -Force (Join-Path $env:GITHUB_WORKSPACE "cpp/installer/sh-LiveVocoder-Setup.sh") $d
+          Copy-Item -Force (Join-Path $env:GITHUB_WORKSPACE "scripts/check-wine-livevocoder-host.sh") $d
+
       - name: Upload portable folder (exe + DLLs + Python for Wine / Windows)
         uses: actions/upload-artifact@v4
         with:
@@ -132,7 +139,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: LiveVocoder-Cpp-setup-v6.0
-          path: cpp/dist-installer/LiveVocoder-Setup.exe
+          path: |
+            cpp/dist-installer/LiveVocoder-Setup.exe
+            cpp/dist-installer/sh-LiveVocoder-Setup.sh
+            cpp/dist-installer/check-wine-livevocoder-host.sh
 
   release:
     name: Publish GitHub Release (tag builds only)
@@ -168,4 +178,6 @@ jobs:
           files: |
             release-assets/LiveVocoder_Setup_*.exe
             release-assets/LiveVocoder-Setup.exe
+            release-assets/sh-LiveVocoder-Setup.sh
+            release-assets/check-wine-livevocoder-host.sh
             release-assets/LiveVocoder-6.0.ico

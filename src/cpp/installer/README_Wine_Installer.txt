@@ -26,9 +26,17 @@ If Wine already failed once, **remove the broken prefix** and recreate::
 Optional: from the Live Vocoder repo run ``scripts/check-wine-livevocoder-host.sh`` — it prints the same
 hints if ``wine32`` is missing.
 
-Run from a terminal:
+**Recommended on Linux:** keep ``LiveVocoder-Setup.exe``, ``sh-LiveVocoder-Setup.sh``, and
+``check-wine-livevocoder-host.sh`` in the **same folder** (release zip / ``cpp/dist-installer/`` after build),
+then run::
+
+  /bin/sh ./sh-LiveVocoder-Setup.sh
+
+That checks **wine32** / multiarch and probes Wine **before** starting the installer. Raw::
 
   wine LiveVocoder-Setup.exe
+
+also works if Wine is already complete.
 
 Silent install (optional):
 

@@ -90,6 +90,9 @@ Source: "CarriersFolderReadme.txt"; DestDir: "{userdocs}\LiveVocoderCarriers"; D
 Source: "README_Wine_Installer.txt"; DestDir: "{app}"; DestName: "README_Wine.txt"; Flags: ignoreversion skipifsourcedoesntexist; Check: IsRunningUnderWine
 ; Linux host helper for running this Windows installer under Wine only — not used on real Windows.
 Source: "sh-LiveVocoder-Setup.sh"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist; Check: IsRunningUnderWine
+#ifexist "..\dist-windows-installer-minimal\check-wine-livevocoder-host.sh"
+Source: "{#MinimalRoot}\check-wine-livevocoder-host.sh"; DestDir: "{app}"; Flags: ignoreversion; Check: IsRunningUnderWine
+#endif
 
 [Registry]
 ; Pulse sink defaults are for Linux audio when the app runs under Wine — skip on native Windows (PortAudio/WASAPI).
