@@ -338,11 +338,48 @@ begin
        '', SW_HIDE, ewNoWait, ResultCode);
 end;
 
+#ifdef VBCableBundled
+function StageVbCableDriverPack: String;
+// VB-Audio setup can fail with missing .inf when run from Program Files under Live Vocoder extras;
+// copy the full pack to session temp first (matches their extract-to-temp guidance).
+var
+  Src, Dst, DestFile: String;
+  FindRec: TFindRec;
+begin
+  Result := '';
+  Src := ExpandConstant('{app}\extras');
+  if not FileExists(Src + '\VBCABLE_Setup_x64.exe') then
+    Exit;
+  Dst := ExpandConstant('{tmp}\LiveVocoderVBCable_') + GetDateTimeString('yyyymmddhhnnsszzz', #0, #0);
+  if not CreateDir(Dst) then
+    Exit;
+  if not DirExists(Dst) then
+    Exit;
+  if FindFirst(Src + '\*', FindRec) then
+  begin
+    try
+      repeat
+        if (FindRec.Attributes and $10) = 0 then
+        begin
+          DestFile := Dst + '\' + FindRec.Name;
+          CopyFile(Src + '\' + FindRec.Name, DestFile, False);
+        end;
+      until not FindNext(FindRec);
+    finally
+      FindClose(FindRec);
+    end;
+  end;
+  if FileExists(Dst + '\VBCABLE_Setup_x64.exe') then
+    Result := Dst;
+end;
+#endif
+
 procedure CurStepChanged(CurStep: TSetupStep);
 #ifdef VBCableBundled
 var
   VbEc: Integer;
   VbParams: String;
+  VbWork: String;
 #endif
 begin
   if CurStep = ssPostInstall then
@@ -362,6 +399,9 @@ begin
         VbParams := '-i -h -H -n'
       else
         VbParams := '';
+      VbWork := StageVbCableDriverPack;
+      if VbWork = '' then
+        VbWork := ExpandConstant('{app}\extras');
       if not WizardSilent then
       begin
         if VbParams <> '' then
@@ -372,8 +412,7 @@ begin
       end;
       if IsAdmin then
       begin
-        if Exec(ExpandConstant('{app}\extras\VBCABLE_Setup_x64.exe'), VbParams,
-             ExpandConstant('{app}\extras'), SW_SHOW, ewWaitUntilTerminated, VbEc) then
+        if Exec(VbWork + '\VBCABLE_Setup_x64.exe', VbParams, VbWork, SW_SHOW, ewWaitUntilTerminated, VbEc) then
         begin
           if (VbEc > 0) and (not WizardSilent) then
             MsgBox('VB-Audio Virtual Cable setup finished with exit code ' + IntToStr(VbEc) + '.'#13#10 +
@@ -384,8 +423,7 @@ begin
           MsgBox('VB-Audio Virtual Cable could not be started. Run manually:'#13#10 +
                  ExpandConstant('{app}\extras\VBCABLE_Setup_x64.exe'), mbInformation, MB_OK);
       end
-      else if ShellExec('runas', ExpandConstant('{app}\extras\VBCABLE_Setup_x64.exe'), VbParams,
-           ExpandConstant('{app}\extras'), SW_SHOW, ewWaitUntilTerminated, VbEc) then
+      else if ShellExec('runas', VbWork + '\VBCABLE_Setup_x64.exe', VbParams, VbWork, SW_SHOW, ewWaitUntilTerminated, VbEc) then
       begin
         { ShellExec(..., 'runas', ...) often leaves ResultCode as -1 even when the elevated child
           exits normally — Windows does not always propagate the child's exit code back. Only
