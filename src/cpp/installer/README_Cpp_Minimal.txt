@@ -157,6 +157,11 @@ Meters (when streaming)
 
 Audio devices (Windows)
 -----------------------
+**VB-Cable has two different names:** **CABLE Input** is a *playback* endpoint (Live Vocoder sends processed
+audio there via PortAudio). **CABLE Output** is a *recording* endpoint (OBS/Discord use it as the microphone).
+The status bar may also say **Windows recording default → CABLE Output** — that is only “what Windows uses as
+the default mic for other apps,” not the same as PortAudio’s chosen capture device inside Live Vocoder.
+
 PortAudio opens the default capture/playback devices unless you override with environment
 variables (then restart the app):
 
